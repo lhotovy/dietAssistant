@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Recipe {
+  id           String     @id @default(cuid())
+  name         String
+  slug         String     @unique
+  description  String
+  mealTypes    String     // comma-separated: snidane,obed,vecere,svacina,dessert
+  ingredients  String     // JSON: [{ name, amount, unit }]
+  instructions String     // JSON: string[]
+  prepTime     Int        // minutes
+  cookTime     Int        // minutes
+  servings     Int
+  tags         String     // comma-separated tags
+  source       String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  favorites    Favorite[]
+}
+
+model Ingredient {
+  id             String  @id @default(cuid())
+  name           String  @unique
+  histamineLevel String  // SAFE | MODERATE | AVOID
+  category       String  // maso, zelenina, mlecne, obiloviny, koreni, oleje, napoje, ostatni
+  notes          String?
+}
+
+model Favorite {
+  id                 String   @id @default(cuid())
+  userId             String
+  recipeId           String?
+  recipe             Recipe?  @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+  customName         String?
+  customIngredients  String?  // JSON override
+  customInstructions String?  // JSON override
+  notes              String?
+  createdAt          DateTime @default(now())
+
+  @@index([userId])
+}
+
+model MealPlan {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  startDate DateTime
+  endDate   DateTime
+  days      String   // JSON: [{ date, meals: [{ type, recipeId, customRecipe? }] }]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model ChatSession {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String?
+  messages  String   // JSON: CoreMessage[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
