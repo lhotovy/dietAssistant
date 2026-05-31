@@ -5,7 +5,8 @@ import { CalendarDays, Trash2, ChevronDown, ChevronUp, MessageCircle } from "luc
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import type { MealPlanDay } from "@/types";
-import { MEAL_TYPE_LABELS, type MealType } from "@/types";
+import { useUserSessionReady } from "@/components/user-session-provider";
+import { PlanMealItem } from "@/components/plan/plan-meal-item";
 
 interface MealPlan {
   id: string;
@@ -33,13 +34,15 @@ function formatDayHeader(dateStr: string): string {
 }
 
 export function PlanClient() {
+  const userReady = useUserSessionReady();
   const [plans, setPlans] = useState<MealPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!userReady) return;
     fetchPlans();
-  }, []);
+  }, [userReady]);
 
   async function fetchPlans() {
     try {
@@ -69,13 +72,13 @@ export function PlanClient() {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       <div className="px-4 py-3 border-b border-stone-100 bg-white">
         <h1 className="text-base font-semibold text-stone-900">Jídelní plány</h1>
         <p className="text-xs text-stone-500">{plans.length} uložených plánů</p>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
         {plans.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-4 py-12">
             <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center mb-4">
@@ -147,17 +150,7 @@ export function PlanClient() {
                           </p>
                           <div className="space-y-1.5">
                             {day.meals.map((meal, j) => (
-                              <div
-                                key={j}
-                                className="flex items-center gap-2 text-sm"
-                              >
-                                <span className="flex-shrink-0 text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full min-w-[64px] text-center">
-                                  {MEAL_TYPE_LABELS[meal.type as MealType] ?? meal.type}
-                                </span>
-                                <span className="text-stone-700">
-                                  {meal.recipeName}
-                                </span>
-                              </div>
+                              <PlanMealItem key={j} meal={meal} />
                             ))}
                           </div>
                         </div>

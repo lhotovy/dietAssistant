@@ -3,11 +3,9 @@ import { randomUUID } from "crypto";
 
 export const USER_COOKIE = "diet_user_id";
 
+/** Stable anonymous user id; creates and persists the cookie when missing. */
 export async function getUserId(): Promise<string> {
-  const cookieStore = await cookies();
-  const existing = cookieStore.get(USER_COOKIE);
-  if (existing?.value) return existing.value;
-  return randomUUID();
+  return ensureUserCookie();
 }
 
 export async function ensureUserCookie(): Promise<string> {

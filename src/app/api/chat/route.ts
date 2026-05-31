@@ -1,10 +1,18 @@
-import { streamText, tool, stepCountIs, convertToModelMessages, UIMessage } from "ai";
+import { streamText, tool, convertToModelMessages, UIMessage } from "ai";
+import { chatStopWhen } from "@/lib/chat-stop";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { buildSystemPrompt } from "@/lib/system-prompt";
+import { buildDateContext } from "@/lib/date-context";
 import { parseRecipe, slugify } from "@/lib/recipe-utils";
 import { getUserId } from "@/lib/user";
+import {
+  enrichMealPlanDays,
+  validateMealPlanRecipeIds,
+} from "@/lib/meal-plan-validate";
+import { buildRecipeCatalogContext } from "@/lib/recipe-catalog";
+import type { MealPlanDay } from "@/types";
 
 export const maxDuration = 60;
 
@@ -27,22 +35,42 @@ export async function POST(req: Request) {
       ? favorites
           .map((f) => {
             const name = f.customName ?? f.recipe?.name ?? "Neznámý recept";
+            const idPart = f.recipeId ? ` [recipeId: ${f.recipeId}]` : "";
             const note = f.notes ? ` (poznámka: ${f.notes})` : "";
-            return `- ${name}${note}`;
+            return `- ${name}${idPart}${note}`;
           })
           .join("\n")
       : "";
 
-  const modelMessages = await convertToModelMessages(messages);
+  const [recipeCatalogContext, modelMessages] = await Promise.all([
+    buildRecipeCatalogContext(),
+    convertToModelMessages(messages),
+  ]);
+
+  const mealPlanMealSchema = z.object({
+    type: z.enum(["snidane", "obed", "vecere", "svacina", "dessert"]),
+    recipeId: z.string().describe("ID z katalogu receptů"),
+  });
+
+  const mealPlanDaysSchema = z.array(
+    z.object({
+      date: z.string().describe("YYYY-MM-DD"),
+      meals: z.array(mealPlanMealSchema),
+    })
+  );
 
   const result = streamText({
     model: openai("gpt-4o-mini"),
-    system: buildSystemPrompt(favoritesContext),
+    system: buildSystemPrompt(
+      favoritesContext,
+      buildDateContext(),
+      recipeCatalogContext
+    ),
     messages: modelMessages,
     tools: {
       searchRecipes: tool({
         description:
-          "Vyhledá recepty v databázi podle dotazu, typu jídla nebo dostupných ingrediencí.",
+          "Vyhledá recepty v databázi. Povinný krok před sestavením jídelního plánu — vrací id, name a další údaje. Použij recipeId z výsledku v JSON plánu. Můžeš volat opakovaně pro různé typy jídel (mealTypes) a dotazy.",
         inputSchema: z.object({
           query: z.string().describe("Hledaný výraz nebo název receptu"),
           mealTypes: z
@@ -83,7 +111,7 @@ export async function POST(req: Request) {
 
           const recipes = await prisma.recipe.findMany({
             where: andConditions.length > 0 ? { AND: andConditions } : {},
-            take: 5,
+            take: 15,
             orderBy: { name: "asc" },
           });
 
@@ -135,51 +163,30 @@ export async function POST(req: Request) {
         },
       }),
 
-      saveMealPlan: tool({
+      prepareMealPlan: tool({
         description:
-          "Uloží navržený jídelní plán. Použij po vytvoření jídelního plánu na přání uživatelky.",
+          "Předá plán aplikaci pro tlačítko Uložit. Zavolej maximálně JEDNOU po textovém plánu. Po zavolání už nic dalšího nepiš ani nevolaj další nástroje.",
         inputSchema: z.object({
-          title: z
-            .string()
-            .describe("Název plánu, např. 'Týden 2.–8. června'"),
-          startDate: z
-            .string()
-            .describe("Datum začátku ve formátu YYYY-MM-DD"),
-          endDate: z
-            .string()
-            .describe("Datum konce ve formátu YYYY-MM-DD"),
-          days: z
-            .array(
-              z.object({
-                date: z.string(),
-                meals: z.array(
-                  z.object({
-                    type: z.enum([
-                      "snidane",
-                      "obed",
-                      "vecere",
-                      "svacina",
-                      "dessert",
-                    ]),
-                    recipeName: z.string(),
-                    recipeId: z.string().optional(),
-                  })
-                ),
-              })
-            )
-            .describe("Dny s jídly"),
+          title: z.string(),
+          startDate: z.string().describe("YYYY-MM-DD"),
+          endDate: z.string().describe("YYYY-MM-DD"),
+          days: mealPlanDaysSchema,
         }),
         execute: async ({ title, startDate, endDate, days }) => {
-          const plan = await prisma.mealPlan.create({
-            data: {
-              userId,
-              title,
-              startDate: new Date(startDate),
-              endDate: new Date(endDate),
-              days: JSON.stringify(days),
-            },
-          });
-          return { success: true, planId: plan.id, title };
+          const validation = await validateMealPlanRecipeIds(
+            days as MealPlanDay[]
+          );
+          if (!validation.ok) {
+            return { success: false, error: validation.error };
+          }
+          const enriched = await enrichMealPlanDays(days as MealPlanDay[]);
+          return {
+            type: "mealPlan",
+            title,
+            startDate,
+            endDate,
+            days: enriched,
+          };
         },
       }),
 
@@ -237,7 +244,7 @@ export async function POST(req: Request) {
         },
       }),
     },
-    stopWhen: stepCountIs(5),
+    stopWhen: chatStopWhen,
     onFinish: async ({ response }) => {
       if (sessionId) {
         const allMessages = [...messages, ...response.messages];

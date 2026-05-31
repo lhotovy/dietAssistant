@@ -4,9 +4,17 @@ import { useState } from "react";
 import type { UIMessage } from "ai";
 import { RecipeCard } from "@/components/ui/recipe-card";
 import type { RecipeData } from "@/types";
+import { isMealPlanPayload } from "@/lib/meal-plan-parse";
+import {
+  extractMealPlansFromMessage,
+  getAssistantDisplayText,
+} from "@/lib/meal-plan-from-message";
+import { stripHiddenJsonBlocks } from "@/lib/message-display";
+import { MealPlanSaveCard } from "./meal-plan-save-card";
 
 interface ChatMessageProps {
   message: UIMessage;
+  isStreaming?: boolean;
 }
 
 function extractRecipes(text: string): RecipeData[] {
@@ -16,8 +24,12 @@ function extractRecipes(text: string): RecipeData[] {
     try {
       const parsed = JSON.parse(match[1]);
       if (Array.isArray(parsed)) {
-        recipes.push(...parsed.filter(isRecipeData));
-      } else if (isRecipeData(parsed)) {
+        recipes.push(
+          ...parsed.filter(
+            (item) => isRecipeData(item) && !isMealPlanPayload(item)
+          )
+        );
+      } else if (isRecipeData(parsed) && !isMealPlanPayload(parsed)) {
         recipes.push(parsed);
       }
     } catch {
@@ -35,10 +47,6 @@ function isRecipeData(obj: unknown): obj is RecipeData {
     "ingredients" in obj &&
     "instructions" in obj
   );
-}
-
-function cleanText(text: string): string {
-  return text.replace(/```json\s*[\s\S]*?```/g, "").trim();
 }
 
 function renderText(text: string) {
@@ -60,21 +68,50 @@ function renderText(text: string) {
   });
 }
 
-export function ChatMessage({ message }: ChatMessageProps) {
+export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) {
   const [savedRecipes, setSavedRecipes] = useState<Set<string>>(new Set());
 
   if (message.role === "system") return null;
 
   const isUser = message.role === "user";
 
-  // Extract text from parts (new AI SDK format)
-  const textParts = message.parts?.filter(
-    (p): p is { type: "text"; text: string } => p.type === "text"
-  ) ?? [];
-  const fullText = textParts.map((p) => p.text).join("");
+  const fullText = isUser
+    ? (message.parts
+        ?.filter(
+          (p): p is { type: "text"; text: string } =>
+            typeof p === "object" &&
+            p !== null &&
+            "type" in p &&
+            p.type === "text" &&
+            "text" in p
+        )
+        .map((p) => p.text)
+        .join("") ?? "")
+    : getAssistantDisplayText(message);
 
   const recipes = isUser ? [] : extractRecipes(fullText);
-  const displayText = isUser ? fullText : cleanText(fullText);
+  const mealPlans =
+    isUser || isStreaming ? [] : extractMealPlansFromMessage(message);
+  const displayText = isUser ? fullText : stripHiddenJsonBlocks(fullText);
+  const hasPrepareTool = message.parts?.some((p) => {
+    if (typeof p !== "object" || p === null) return false;
+    const r = p as Record<string, unknown>;
+    const type = String(r.type ?? "");
+    return (
+      type.includes("prepareMealPlan") || r.toolName === "prepareMealPlan"
+    );
+  });
+
+  const looksLikeWeeklyPlan =
+    /pondělí|úterý|středa|čtvrtek|pátek|sobota|neděle/i.test(displayText) &&
+    /snídaně|oběd|večeře/i.test(displayText);
+
+  const prepareIncomplete =
+    !isUser &&
+    !isStreaming &&
+    mealPlans.length === 0 &&
+    looksLikeWeeklyPlan &&
+    !hasPrepareTool;
 
   const handleSaveToFavorites = async (recipe: RecipeData) => {
     try {
@@ -96,7 +133,8 @@ export function ChatMessage({ message }: ChatMessageProps) {
     }
   };
 
-  if (!displayText && recipes.length === 0) return null;
+  if (!displayText && recipes.length === 0 && mealPlans.length === 0)
+    return null;
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
@@ -111,6 +149,15 @@ export function ChatMessage({ message }: ChatMessageProps) {
               <div className="bg-stone-50 rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-stone-800 leading-relaxed">
                 {renderText(displayText)}
               </div>
+            )}
+            {mealPlans.map((plan, i) => (
+              <MealPlanSaveCard key={`${plan.title}-${i}`} plan={plan} />
+            ))}
+            {prepareIncomplete && (
+              <p className="text-sm text-amber-700 bg-amber-50 rounded-xl px-4 py-3">
+                Plán zatím nelze uložit — odpověď nebyla dokončena. Požádej znovu:
+                „Dokonči plán pro uložení podle katalogu receptů.“
+              </p>
             )}
             {recipes.map((recipe, i) => (
               <RecipeCard

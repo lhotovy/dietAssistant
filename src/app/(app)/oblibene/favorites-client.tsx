@@ -5,8 +5,10 @@ import { Heart, Trash2, Edit2, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RecipeCard } from "@/components/ui/recipe-card";
 import type { FavoriteWithRecipe, RecipeData } from "@/types";
+import { useUserSessionReady } from "@/components/user-session-provider";
 
 export function FavoritesClient() {
+  const userReady = useUserSessionReady();
   const [favorites, setFavorites] = useState<FavoriteWithRecipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -14,8 +16,9 @@ export function FavoritesClient() {
   const [editNotes, setEditNotes] = useState("");
 
   useEffect(() => {
+    if (!userReady) return;
     fetchFavorites();
-  }, []);
+  }, [userReady]);
 
   async function fetchFavorites() {
     try {

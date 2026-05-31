@@ -23,9 +23,10 @@ export interface MealPlanDay {
   date: string; // ISO date string
   meals: {
     type: "snidane" | "obed" | "vecere" | "svacina" | "dessert";
-    recipeId?: string;
+    /** Required for plans saved from chat — links to Recipe.id */
+    recipeId: string;
+    recipeName: string;
     customRecipe?: Partial<RecipeData>;
-    recipeName?: string;
   }[];
 }
 

@@ -2,36 +2,43 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
+import type { UIMessage } from "ai";
 import { useEffect, useRef, useState, useMemo } from "react";
-import { Send, Loader2, Plus } from "lucide-react";
+import { Send, Loader2, Plus, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChatMessage } from "./chat-message";
 import { cn } from "@/lib/utils";
-import { randomUUID } from "@/lib/client-utils";
 
 const QUICK_PROMPTS = [
+  "Připrav jídelní plán na příští týden",
   "Navrhni mi snídani z vajec a zeleniny",
   "Co uvařit k obědu z kuřecího masa?",
   "Chci snadnou večeři do 30 minut",
-  "Vytvoř mi jídelní plán na týden",
   "Jakou svačinu si mohu dát?",
 ];
 
 interface ChatInterfaceProps {
-  sessionId?: string;
-  onSessionCreated?: (sessionId: string) => void;
+  sessionId: string;
+  initialMessages?: UIMessage[];
+  showHistory?: boolean;
+  onToggleHistory?: () => void;
+  onNewChat?: () => void;
+  onSessionsChange?: () => void;
 }
 
 export function ChatInterface({
-  sessionId: initialSessionId,
-  onSessionCreated,
+  sessionId,
+  initialMessages = [],
+  showHistory = false,
+  onToggleHistory,
+  onNewChat,
+  onSessionsChange,
 }: ChatInterfaceProps) {
-  const [sessionId] = useState(() => initialSessionId ?? randomUUID());
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const sessionCreatedRef = useRef(false);
-
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
@@ -41,29 +48,42 @@ export function ChatInterface({
     [sessionId]
   );
 
-  const { messages, sendMessage, status, setMessages } = useChat({ transport });
+  const { messages, sendMessage, status } = useChat({
+    transport,
+    messages: initialMessages,
+  });
 
+  const prevStatusRef = useRef(status);
   const isLoading = status === "submitted" || status === "streaming";
 
   useEffect(() => {
+    if (!shouldAutoScrollRef.current) return;
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const handleMessagesScroll = () => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    const distanceFromBottom =
+      el.scrollHeight - el.scrollTop - el.clientHeight;
+    shouldAutoScrollRef.current = distanceFromBottom < 80;
+  };
+
   useEffect(() => {
-    if (
-      !sessionCreatedRef.current &&
-      messages.length > 0 &&
-      !initialSessionId
-    ) {
-      sessionCreatedRef.current = true;
-      onSessionCreated?.(sessionId);
+    const wasBusy =
+      prevStatusRef.current === "submitted" ||
+      prevStatusRef.current === "streaming";
+    if (wasBusy && status === "ready" && messages.length > 0) {
+      onSessionsChange?.();
     }
-  }, [messages, initialSessionId, onSessionCreated, sessionId]);
+    prevStatusRef.current = status;
+  }, [status, messages.length, onSessionsChange]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
     const text = input.trim();
     setInput("");
+    shouldAutoScrollRef.current = true;
     await sendMessage({ text });
   };
 
@@ -75,36 +95,46 @@ export function ChatInterface({
   };
 
   const handleQuickPrompt = async (prompt: string) => {
+    shouldAutoScrollRef.current = true;
     await sendMessage({ text: prompt });
   };
 
-  const handleNewChat = () => {
-    setMessages([]);
-    setInput("");
-  };
-
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-stone-100 bg-white">
-        <div>
+    <div className="flex flex-col h-full flex-1 min-h-0">
+      <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-stone-100 bg-white">
+        <div className="min-w-0">
           <h1 className="text-base font-semibold text-stone-900">
             Asistent pro dietu
           </h1>
           <p className="text-xs text-stone-500">Nízkohistaminové recepty</p>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleNewChat}
-          title="Nový rozhovor"
-        >
-          <Plus className="h-5 w-5" />
-        </Button>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <Button
+            variant={showHistory ? "secondary" : "ghost"}
+            size="icon"
+            onClick={onToggleHistory}
+            title="Historie rozhovorů"
+          >
+            <History className="h-5 w-5" />
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onNewChat}
+            className="gap-1.5"
+            title="Nový rozhovor"
+          >
+            <Plus className="h-4 w-4" />
+            Nový rozhovor
+          </Button>
+        </div>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div
+        ref={messagesScrollRef}
+        onScroll={handleMessagesScroll}
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4 space-y-4"
+      >
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center px-4 py-8">
             <div className="w-16 h-16 rounded-2xl bg-green-50 flex items-center justify-center mb-4">
@@ -135,8 +165,16 @@ export function ChatInterface({
           </div>
         )}
 
-        {messages.map((message) => (
-          <ChatMessage key={message.id} message={message} />
+        {messages.map((message, index) => (
+          <ChatMessage
+            key={message.id}
+            message={message}
+            isStreaming={
+              isLoading &&
+              index === messages.length - 1 &&
+              message.role === "assistant"
+            }
+          />
         ))}
 
         {isLoading && (
@@ -149,7 +187,6 @@ export function ChatInterface({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
       <div className="border-t border-stone-100 bg-white px-4 py-3 pb-safe">
         <div className="flex items-end gap-2">
           <textarea

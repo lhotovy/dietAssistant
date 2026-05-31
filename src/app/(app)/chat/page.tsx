@@ -1,4 +1,4 @@
-import { ChatInterface } from "@/components/chat/chat-interface";
+import { ChatPageClient } from "@/components/chat/chat-page-client";
 
 export const metadata = {
   title: "Chat — Dietní asistent",
@@ -6,8 +6,8 @@ export const metadata = {
 
 export default function ChatPage() {
   return (
-    <div className="flex flex-col h-full">
-      <ChatInterface />
+    <div className="flex flex-col h-full min-h-0">
+      <ChatPageClient />
     </div>
   );
 }
