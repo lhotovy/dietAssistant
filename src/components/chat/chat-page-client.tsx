@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { UIMessage } from "ai";
 import { ChatInterface } from "./chat-interface";
-import { randomUUID } from "@/lib/client-utils";
+import { ensureMessageIds, randomUUID } from "@/lib/client-utils";
 import { cn } from "@/lib/utils";
 import { useUserSessionReady } from "@/components/user-session-provider";
 
@@ -51,7 +51,7 @@ export function ChatPageClient() {
       if (!res.ok) return;
       const data = await res.json();
       setActiveSessionId(data.id);
-      setInitialMessages(data.messages as UIMessage[]);
+      setInitialMessages(ensureMessageIds(data.messages as UIMessage[]));
       setShowHistory(false);
     } finally {
       setLoadingSession(false);

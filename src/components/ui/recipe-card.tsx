@@ -64,11 +64,16 @@ export function RecipeCard({
           )}
         </div>
 
-        <p className="text-sm text-stone-500 leading-relaxed mb-3">
+        <p
+          className={cn(
+            "text-sm text-stone-500 leading-relaxed mb-3",
+            compact && !expanded && "line-clamp-2"
+          )}
+        >
           {recipe.description}
         </p>
 
-        <div className="flex items-center gap-4 text-xs text-stone-500">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-stone-500">
           <span className="flex items-center gap-1">
             <Clock className="h-3.5 w-3.5" />
             <span>Příprava: {recipe.prepTime} min</span>
@@ -86,22 +91,14 @@ export function RecipeCard({
         </div>
       </div>
 
-      {compact && (
+      {compact && !expanded && (
         <button
-          onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center justify-center gap-1 py-2 text-sm text-green-700 font-medium border-t border-stone-100 hover:bg-stone-50 transition-colors"
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="w-full flex items-center justify-center gap-1 py-2.5 text-sm text-green-700 font-medium border-t border-stone-100 hover:bg-stone-50 transition-colors"
         >
-          {expanded ? (
-            <>
-              <ChevronUp className="h-4 w-4" />
-              Skrýt recept
-            </>
-          ) : (
-            <>
-              <ChevronDown className="h-4 w-4" />
-              Zobrazit recept
-            </>
-          )}
+          <ChevronDown className="h-4 w-4" />
+          Zobrazit celý recept
         </button>
       )}
 
@@ -142,6 +139,17 @@ export function RecipeCard({
             </ol>
           </div>
         </div>
+      )}
+
+      {compact && expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          className="w-full flex items-center justify-center gap-1 py-2.5 text-sm text-green-700 font-medium border-t border-stone-100 hover:bg-stone-50 transition-colors"
+        >
+          <ChevronUp className="h-4 w-4" />
+          Skrýt recept
+        </button>
       )}
     </div>
   );

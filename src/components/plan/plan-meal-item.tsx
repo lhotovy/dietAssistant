@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { RecipeCard } from "@/components/ui/recipe-card";
 import type { MealPlanDay } from "@/types";
@@ -11,9 +11,10 @@ type PlanMeal = MealPlanDay["meals"][number];
 
 interface PlanMealItemProps {
   meal: PlanMeal;
+  trailing?: ReactNode;
 }
 
-export function PlanMealItem({ meal }: PlanMealItemProps) {
+export function PlanMealItem({ meal, trailing }: PlanMealItemProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [recipe, setRecipe] = useState<RecipeData | null>(null);
@@ -70,26 +71,29 @@ export function PlanMealItem({ meal }: PlanMealItemProps) {
 
   return (
     <div className="space-y-2">
-      <button
-        type="button"
-        onClick={loadAndToggle}
-        disabled={loading}
-        className="w-full flex items-center gap-2 text-sm text-left rounded-lg hover:bg-stone-50 px-1 py-1 -mx-1 transition-colors disabled:opacity-60"
-      >
-        <span className="flex-shrink-0 text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full min-w-[64px] text-center">
-          {label}
-        </span>
-        <span className="text-stone-700 flex-1 underline decoration-stone-300 underline-offset-2">
-          {recipeName}
-        </span>
-        {loading ? (
-          <Loader2 className="h-4 w-4 animate-spin text-stone-400 flex-shrink-0" />
-        ) : open ? (
-          <ChevronUp className="h-4 w-4 text-stone-400 flex-shrink-0" />
-        ) : (
-          <ChevronDown className="h-4 w-4 text-stone-400 flex-shrink-0" />
-        )}
-      </button>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={loadAndToggle}
+          disabled={loading}
+          className="flex-1 min-w-0 flex items-center gap-2 text-sm text-left rounded-lg hover:bg-stone-50 px-1 py-1 -mx-1 transition-colors disabled:opacity-60"
+        >
+          <span className="shrink-0 text-xs font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded-full min-w-[64px] text-center">
+            {label}
+          </span>
+          <span className="text-stone-700 flex-1 min-w-0 underline decoration-stone-300 underline-offset-2 truncate">
+            {recipeName}
+          </span>
+          {loading ? (
+            <Loader2 className="h-4 w-4 animate-spin text-stone-400 shrink-0" />
+          ) : open ? (
+            <ChevronUp className="h-4 w-4 text-stone-400 shrink-0" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-stone-400 shrink-0" />
+          )}
+        </button>
+        {trailing}
+      </div>
 
       {error && <p className="text-xs text-red-600 pl-1">{error}</p>}
 

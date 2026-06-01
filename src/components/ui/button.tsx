@@ -2,7 +2,7 @@ import { forwardRef } from "react";
 import { cn } from "@/lib/utils";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "ghost" | "danger";
+  variant?: "primary" | "accent" | "secondary" | "ghost" | "danger";
   size?: "sm" | "md" | "lg" | "icon";
 }
 
@@ -12,10 +12,15 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         className={cn(
-          "inline-flex items-center justify-center rounded-xl font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 disabled:opacity-50 disabled:pointer-events-none",
+          "inline-flex items-center justify-center rounded-xl font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 disabled:pointer-events-none",
+          variant === "accent" && "focus-visible:ring-fuchsia-700",
+          (variant === "primary" || variant === "secondary" || variant === "ghost" || variant === "danger") &&
+            "focus-visible:ring-green-500",
           {
             "bg-green-600 text-white hover:bg-green-700 active:bg-green-800":
               variant === "primary",
+            "bg-fuchsia-800 text-white hover:bg-fuchsia-900 active:bg-fuchsia-950":
+              variant === "accent",
             "bg-stone-100 text-stone-800 hover:bg-stone-200 active:bg-stone-300":
               variant === "secondary",
             "text-stone-600 hover:bg-stone-100 active:bg-stone-200":

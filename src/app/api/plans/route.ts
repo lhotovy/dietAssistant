@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserId } from "@/lib/user";
 import type { MealPlanDay } from "@/types";
-import { validateMealPlanRecipeIds } from "@/lib/meal-plan-validate";
+import {
+  enrichMealPlanDays,
+  validateMealPlanRecipeIds,
+} from "@/lib/meal-plan-validate";
 
 export async function GET() {
   const userId = await getUserId();
@@ -54,6 +57,51 @@ export async function POST(req: NextRequest) {
       days: JSON.stringify(days),
     },
   });
+
+  return NextResponse.json({
+    id: plan.id,
+    title: plan.title,
+    startDate: plan.startDate,
+    endDate: plan.endDate,
+    days: JSON.parse(plan.days) as MealPlanDay[],
+    createdAt: plan.createdAt,
+  });
+}
+
+export async function PATCH(req: NextRequest) {
+  const userId = await getUserId();
+  const body = await req.json();
+  const { id, days } = body as { id?: string; days?: MealPlanDay[] };
+
+  if (!id || !Array.isArray(days)) {
+    return NextResponse.json(
+      { error: "Neplatná data jídelního plánu" },
+      { status: 400 }
+    );
+  }
+
+  const validation = await validateMealPlanRecipeIds(days, {
+    allowEmptySlots: true,
+  });
+  if (!validation.ok) {
+    return NextResponse.json({ error: validation.error }, { status: 400 });
+  }
+
+  const enriched = await enrichMealPlanDays(days);
+
+  const updated = await prisma.mealPlan.updateMany({
+    where: { id, userId },
+    data: { days: JSON.stringify(enriched) },
+  });
+
+  if (updated.count === 0) {
+    return NextResponse.json({ error: "Plán nenalezen" }, { status: 404 });
+  }
+
+  const plan = await prisma.mealPlan.findFirst({ where: { id, userId } });
+  if (!plan) {
+    return NextResponse.json({ error: "Plán nenalezen" }, { status: 404 });
+  }
 
   return NextResponse.json({
     id: plan.id,

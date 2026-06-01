@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MessageCircle, CalendarDays, Heart } from "lucide-react";
+import { MessageCircle, CalendarDays, Heart, UtensilsCrossed } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/chat", label: "Chat", icon: MessageCircle },
+  { href: "/recepty", label: "Recepty", icon: UtensilsCrossed },
   { href: "/plan", label: "Plány", icon: CalendarDays },
   { href: "/oblibene", label: "Oblíbené", icon: Heart },
 ];

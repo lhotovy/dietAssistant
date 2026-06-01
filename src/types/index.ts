@@ -23,9 +23,9 @@ export interface MealPlanDay {
   date: string; // ISO date string
   meals: {
     type: "snidane" | "obed" | "vecere" | "svacina" | "dessert";
-    /** Required for plans saved from chat — links to Recipe.id */
-    recipeId: string;
-    recipeName: string;
+    /** Links to Recipe.id — omitted when slot is cleared in manual edit */
+    recipeId?: string;
+    recipeName?: string;
     customRecipe?: Partial<RecipeData>;
   }[];
 }
@@ -51,3 +51,11 @@ export const MEAL_TYPE_LABELS: Record<MealType, string> = {
   svacina: "Svačina",
   dessert: "Dezert",
 };
+
+export const MEAL_TYPES: MealType[] = [
+  "snidane",
+  "obed",
+  "vecere",
+  "svacina",
+  "dessert",
+];

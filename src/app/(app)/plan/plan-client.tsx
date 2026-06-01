@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { CalendarDays, Trash2, ChevronDown, ChevronUp, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import type { MealPlanDay } from "@/types";
+import type { MealPlanDay, MealType, RecipeData } from "@/types";
 import { useUserSessionReady } from "@/components/user-session-provider";
-import { PlanMealItem } from "@/components/plan/plan-meal-item";
+import { PlanMealSlot } from "@/components/plan/plan-meal-slot";
+import { RecipePicker } from "@/components/plan/recipe-picker";
 
 interface MealPlan {
   id: string;
@@ -15,6 +16,13 @@ interface MealPlan {
   endDate: string;
   days: MealPlanDay[];
   createdAt: string;
+}
+
+interface PickerTarget {
+  planId: string;
+  dayIndex: number;
+  mealIndex: number;
+  mealType: MealType;
 }
 
 const DAY_NAMES = ["Ne", "Po", "Út", "St", "Čt", "Pá", "So"];
@@ -38,6 +46,8 @@ export function PlanClient() {
   const [plans, setPlans] = useState<MealPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [picker, setPicker] = useState<PickerTarget | null>(null);
+  const [savingPlanId, setSavingPlanId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userReady) return;
@@ -61,6 +71,77 @@ export function PlanClient() {
       body: JSON.stringify({ id }),
     });
     setPlans((prev) => prev.filter((p) => p.id !== id));
+  }
+
+  const persistPlanDays = useCallback(
+    async (planId: string, days: MealPlanDay[]) => {
+      setSavingPlanId(planId);
+      try {
+        const res = await fetch("/api/plans", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: planId, days }),
+        });
+        if (!res.ok) return;
+        const updated = (await res.json()) as MealPlan;
+        setPlans((prev) =>
+          prev.map((p) =>
+            p.id === planId
+              ? {
+                  ...p,
+                  days: updated.days,
+                }
+              : p
+          )
+        );
+      } finally {
+        setSavingPlanId(null);
+      }
+    },
+    []
+  );
+
+  function updatePlanDays(
+    planId: string,
+    updater: (days: MealPlanDay[]) => MealPlanDay[]
+  ) {
+    let nextDays: MealPlanDay[] | null = null;
+    setPlans((prev) =>
+      prev.map((p) => {
+        if (p.id !== planId) return p;
+        nextDays = updater(p.days);
+        return { ...p, days: nextDays };
+      })
+    );
+    if (nextDays) void persistPlanDays(planId, nextDays);
+  }
+
+  function handleRemoveMeal(
+    planId: string,
+    dayIndex: number,
+    mealIndex: number
+  ) {
+    updatePlanDays(planId, (days) => {
+      const copy = structuredClone(days);
+      const meal = copy[dayIndex].meals[mealIndex];
+      copy[dayIndex].meals[mealIndex] = { type: meal.type };
+      return copy;
+    });
+  }
+
+  function handleSelectRecipe(recipe: RecipeData) {
+    if (!picker) return;
+    const { planId, dayIndex, mealIndex, mealType } = picker;
+    updatePlanDays(planId, (days) => {
+      const copy = structuredClone(days);
+      copy[dayIndex].meals[mealIndex] = {
+        type: mealType,
+        recipeId: recipe.id,
+        recipeName: recipe.name,
+      };
+      return copy;
+    });
+    setPicker(null);
   }
 
   if (loading) {
@@ -102,55 +183,80 @@ export function PlanClient() {
           <div className="space-y-3">
             {plans.map((plan) => {
               const isExpanded = expandedId === plan.id;
+              const isSaving = savingPlanId === plan.id;
               return (
                 <div
                   key={plan.id}
                   className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm"
                 >
-                  <button
-                    className="w-full p-4 text-left"
-                    onClick={() => setExpandedId(isExpanded ? null : plan.id)}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <h3 className="text-base font-semibold text-stone-900">
-                          {plan.title}
-                        </h3>
-                        <p className="text-xs text-stone-500 mt-0.5">
-                          {formatDate(plan.startDate)} – {formatDate(plan.endDate)}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(plan.id);
-                          }}
-                          className="text-stone-400 hover:text-red-500"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                        {isExpanded ? (
-                          <ChevronUp className="h-4 w-4 text-stone-400" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4 text-stone-400" />
+                  <div className="flex items-center gap-1 p-4">
+                    <button
+                      type="button"
+                      className="flex-1 min-w-0 text-left"
+                      onClick={() =>
+                        setExpandedId(isExpanded ? null : plan.id)
+                      }
+                    >
+                      <h3 className="text-base font-semibold text-stone-900">
+                        {plan.title}
+                      </h3>
+                      <p className="text-xs text-stone-500 mt-0.5">
+                        {formatDate(plan.startDate)} –{" "}
+                        {formatDate(plan.endDate)}
+                        {isSaving && (
+                          <span className="ml-2 text-green-600">Ukládám…</span>
                         )}
-                      </div>
-                    </div>
-                  </button>
+                      </p>
+                    </button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(plan.id)}
+                      className="text-stone-400 hover:text-red-500 shrink-0"
+                      aria-label="Smazat plán"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedId(isExpanded ? null : plan.id)
+                      }
+                      className="shrink-0 p-2 -mr-2 text-stone-400 hover:text-stone-600 rounded-lg hover:bg-stone-50"
+                      aria-label={isExpanded ? "Sbalit plán" : "Rozbalit plán"}
+                    >
+                      {isExpanded ? (
+                        <ChevronUp className="h-4 w-4" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
 
                   {isExpanded && (
                     <div className="border-t border-stone-100 divide-y divide-stone-100">
-                      {plan.days.map((day, i) => (
-                        <div key={i} className="p-4">
+                      {plan.days.map((day, dayIndex) => (
+                        <div key={dayIndex} className="p-4">
                           <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2">
                             {formatDayHeader(day.date)}
                           </p>
                           <div className="space-y-1.5">
-                            {day.meals.map((meal, j) => (
-                              <PlanMealItem key={j} meal={meal} />
+                            {day.meals.map((meal, mealIndex) => (
+                              <PlanMealSlot
+                                key={`${dayIndex}-${mealIndex}-${meal.recipeId ?? "empty"}`}
+                                meal={meal}
+                                onRemove={() =>
+                                  handleRemoveMeal(plan.id, dayIndex, mealIndex)
+                                }
+                                onPick={() =>
+                                  setPicker({
+                                    planId: plan.id,
+                                    dayIndex,
+                                    mealIndex,
+                                    mealType: meal.type as MealType,
+                                  })
+                                }
+                              />
                             ))}
                           </div>
                         </div>
@@ -163,6 +269,14 @@ export function PlanClient() {
           </div>
         )}
       </div>
+
+      {picker && (
+        <RecipePicker
+          mealType={picker.mealType}
+          onSelect={handleSelectRecipe}
+          onClose={() => setPicker(null)}
+        />
+      )}
     </div>
   );
 }

@@ -14,6 +14,12 @@ export async function GET(req: NextRequest) {
 
   const query = searchParams.get("q") ?? "";
   const mealType = searchParams.get("mealType") ?? "";
+  const limitParam = parseInt(searchParams.get("limit") ?? "", 10);
+  const take = Number.isFinite(limitParam)
+    ? Math.min(Math.max(limitParam, 1), 500)
+    : mealType || query
+      ? 100
+      : 200;
 
   const recipes = await prisma.recipe.findMany({
     where: {
@@ -31,7 +37,7 @@ export async function GET(req: NextRequest) {
       ],
     },
     orderBy: { name: "asc" },
-    take: 20,
+    take,
   });
 
   return NextResponse.json(recipes.map(parseRecipe));

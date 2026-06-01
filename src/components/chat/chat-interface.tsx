@@ -167,7 +167,7 @@ export function ChatInterface({
 
         {messages.map((message, index) => (
           <ChatMessage
-            key={message.id}
+            key={`${index}-${message.id ?? message.role}`}
             message={message}
             isStreaming={
               isLoading &&
@@ -178,7 +178,7 @@ export function ChatInterface({
         ))}
 
         {isLoading && (
-          <div className="flex items-center gap-2 text-stone-400 text-sm px-1">
+          <div className="flex items-center gap-2 text-stone-400 text-base px-1">
             <Loader2 className="h-4 w-4 animate-spin" />
             <span>Přemýšlím…</span>
           </div>
@@ -197,14 +197,15 @@ export function ChatInterface({
             placeholder="Napiš, co máš doma nebo co chceš jíst…"
             rows={1}
             className={cn(
-              "flex-1 resize-none rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm text-stone-900 placeholder:text-stone-400",
-              "focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent",
-              "max-h-32 overflow-y-auto"
+              "flex-1 resize-none rounded-xl border border-stone-200 bg-stone-50 px-3 py-2.5 text-base text-stone-900 placeholder:text-stone-400",
+              "focus:outline-none focus:ring-2 focus:ring-fuchsia-700 focus:border-transparent",
+              "max-h-36 overflow-y-auto"
             )}
-            style={{ minHeight: "42px" }}
+            style={{ minHeight: "46px" }}
           />
           <Button
             type="button"
+            variant="accent"
             size="icon"
             onClick={handleSend}
             disabled={!input.trim() || isLoading}

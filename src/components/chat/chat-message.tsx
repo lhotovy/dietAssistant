@@ -140,28 +140,31 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div className={`${isUser ? "max-w-[75%]" : "w-full max-w-full"}`}>
         {isUser ? (
-          <div className="bg-green-600 text-white rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm leading-relaxed">
+          <div className="bg-fuchsia-800 text-white rounded-2xl rounded-tr-sm px-4 py-3 text-base leading-relaxed">
             {displayText}
           </div>
         ) : (
           <div className="space-y-3">
             {displayText && (
-              <div className="bg-stone-50 rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-stone-800 leading-relaxed">
+              <div className="bg-stone-50 rounded-2xl rounded-tl-sm px-4 py-3 text-base text-stone-800 leading-relaxed">
                 {renderText(displayText)}
               </div>
             )}
             {mealPlans.map((plan, i) => (
-              <MealPlanSaveCard key={`${plan.title}-${i}`} plan={plan} />
+              <MealPlanSaveCard
+                key={`meal-plan-${i}-${plan.startDate}-${plan.endDate}`}
+                plan={plan}
+              />
             ))}
             {prepareIncomplete && (
-              <p className="text-sm text-amber-700 bg-amber-50 rounded-xl px-4 py-3">
+              <p className="text-base text-amber-700 bg-amber-50 rounded-xl px-4 py-3">
                 Plán zatím nelze uložit — odpověď nebyla dokončena. Požádej znovu:
                 „Dokonči plán pro uložení podle katalogu receptů.“
               </p>
             )}
             {recipes.map((recipe, i) => (
               <RecipeCard
-                key={`${recipe.id ?? recipe.name}-${i}`}
+                key={`recipe-${i}-${recipe.id ?? recipe.slug ?? recipe.name}`}
                 recipe={recipe}
                 onSaveToFavorites={handleSaveToFavorites}
                 isFavorite={savedRecipes.has(recipe.id ?? recipe.name)}
