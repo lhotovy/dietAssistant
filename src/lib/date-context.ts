@@ -28,13 +28,14 @@ function weekdayInPrague(date: Date): number {
   return map[label] ?? 0;
 }
 
-function addDaysIso(iso: string, days: number): string {
+export function addDaysIso(iso: string, days: number): string {
   const [y, m, d] = iso.split("-").map(Number);
   const utc = new Date(Date.UTC(y, m - 1, d + days, 12));
   return isoDateInPrague(utc);
 }
 
-function mondayOfWeekContaining(iso: string): string {
+/** Monday (YYYY-MM-DD) of the calendar week containing iso, Europe/Prague. */
+export function mondayOfWeekContaining(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
   const date = new Date(Date.UTC(y, m - 1, d, 12));
   const wd = weekdayInPrague(date);

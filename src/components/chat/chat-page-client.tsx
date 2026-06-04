@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { UIMessage } from "ai";
 import { ChatInterface } from "./chat-interface";
+import { PlanningCatalogProvider } from "./planning-catalog-provider";
 import { ensureMessageIds, randomUUID } from "@/lib/client-utils";
 import { cn } from "@/lib/utils";
 import { useUserSessionReady } from "@/components/user-session-provider";
@@ -101,6 +102,7 @@ export function ChatPageClient() {
   }
 
   return (
+    <PlanningCatalogProvider>
     <div className="flex flex-col h-full min-h-0 flex-1">
       {showHistory && (
         <div className="border-b border-stone-100 bg-white max-h-56 overflow-y-auto flex-shrink-0">
@@ -156,5 +158,6 @@ export function ChatPageClient() {
         />
       )}
     </div>
+    </PlanningCatalogProvider>
   );
 }

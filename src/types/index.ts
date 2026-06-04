@@ -59,3 +59,14 @@ export const MEAL_TYPES: MealType[] = [
   "svacina",
   "dessert",
 ];
+
+/** Recipe row for meal-planning context (chat catalog prefetch). */
+export type PlanningRecipe = {
+  id: string;
+  name: string;
+  slug: string;
+  mealTypes: MealType[];
+  description: string;
+  ingredientNames: string[];
+  isFavorite: boolean;
+};

@@ -9,47 +9,54 @@ import { parseRecipe, slugify } from "@/lib/recipe-utils";
 import { getUserId } from "@/lib/user";
 import {
   enrichMealPlanDays,
-  validateMealPlanRecipeIds,
+  validateAndResolveMealPlanDays,
 } from "@/lib/meal-plan-validate";
-import { buildRecipeCatalogContext } from "@/lib/recipe-catalog";
+import { resolvePlanningCatalogContext } from "@/lib/planning-catalog";
+import { getRecipeCatalogIndex } from "@/lib/recipe-catalog-match";
+import { persistChatSession } from "@/lib/chat-session-persist";
+import {
+  buildExistingPlansContext,
+  detectMealPlanWeekConflict,
+  withWeekConflict,
+} from "@/lib/meal-plan-conflicts";
+import { clearRecipeCatalogCache } from "@/lib/recipe-catalog-match";
+import { clearPlanningCatalogCache } from "@/lib/planning-catalog";
+import { createMealPlanForUser } from "@/lib/meal-plan-store";
+import { getUserMealPlanRecords } from "@/lib/meal-plan-user-plans";
 import type { MealPlanDay } from "@/types";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export async function POST(req: Request) {
   const body = await req.json();
   const messages: UIMessage[] = body.messages ?? [];
   const sessionId: string | undefined = body.sessionId;
+  const catalogVersion: string | undefined =
+    typeof body.catalogVersion === "string" ? body.catalogVersion : undefined;
 
   const userId = await getUserId();
 
-  const favorites = await prisma.favorite.findMany({
-    where: { userId },
-    include: { recipe: true },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-  });
-
   const favoritesContext =
-    favorites.length > 0
-      ? favorites
-          .map((f) => {
-            const name = f.customName ?? f.recipe?.name ?? "Neznámý recept";
-            const idPart = f.recipeId ? ` [recipeId: ${f.recipeId}]` : "";
-            const note = f.notes ? ` (poznámka: ${f.notes})` : "";
-            return `- ${name}${idPart}${note}`;
-          })
-          .join("\n")
-      : "";
+    "Oblíbené recepty jsou v katalogu označené ★ u příslušného recipeId.";
 
-  const [recipeCatalogContext, modelMessages] = await Promise.all([
-    buildRecipeCatalogContext(),
+  const [catalogContext, modelMessages, userMealPlans] = await Promise.all([
+    resolvePlanningCatalogContext(userId, catalogVersion),
     convertToModelMessages(messages),
+    getUserMealPlanRecords(userId),
   ]);
+  const recipeCatalogContext = catalogContext.contextText;
+
+  await getRecipeCatalogIndex();
+
+  const existingPlansContext = buildExistingPlansContext(userMealPlans);
 
   const mealPlanMealSchema = z.object({
     type: z.enum(["snidane", "obed", "vecere", "svacina", "dessert"]),
-    recipeId: z.string().describe("ID z katalogu receptů"),
+    recipeId: z
+      .string()
+      .describe(
+        "recipeId (cuid) z katalogu — prvni token radku pred |. Neposilej nazev jidla."
+      ),
   });
 
   const mealPlanDaysSchema = z.array(
@@ -64,13 +71,14 @@ export async function POST(req: Request) {
     system: buildSystemPrompt(
       favoritesContext,
       buildDateContext(),
-      recipeCatalogContext
+      recipeCatalogContext,
+      existingPlansContext
     ),
     messages: modelMessages,
     tools: {
       searchRecipes: tool({
         description:
-          "Vyhledá recepty v databázi. Povinný krok před sestavením jídelního plánu — vrací id, name a další údaje. Použij recipeId z výsledku v JSON plánu. Můžeš volat opakovaně pro různé typy jídel (mealTypes) a dotazy.",
+          "Vyhledá recepty pouze v databázi této aplikace (ne internet). Pro jídelní plán máš katalog v kontextu — searchRecipes volaj jen když potřebuješ ověřit konkrétní název nebo id. Výsledek: pole s id — toto id použij v plánu. Nevymýšlej recepty.",
         inputSchema: z.object({
           query: z.string().describe("Hledaný výraz nebo název receptu"),
           mealTypes: z
@@ -165,7 +173,7 @@ export async function POST(req: Request) {
 
       prepareMealPlan: tool({
         description:
-          "Předá plán aplikaci pro tlačítko Uložit. Zavolej maximálně JEDNOU po textovém plánu. Po zavolání už nic dalšího nepiš ani nevolaj další nástroje.",
+          "Sestavi jidelni plan z recipeId z katalogu. Neposilej recipeName — vrati se z DB. Do DB neuklada. Po zavolani v chatu nic nepis.",
         inputSchema: z.object({
           title: z.string(),
           startDate: z.string().describe("YYYY-MM-DD"),
@@ -173,26 +181,101 @@ export async function POST(req: Request) {
           days: mealPlanDaysSchema,
         }),
         execute: async ({ title, startDate, endDate, days }) => {
-          const validation = await validateMealPlanRecipeIds(
+          const validation = await validateAndResolveMealPlanDays(
             days as MealPlanDay[]
           );
           if (!validation.ok) {
-            return { success: false, error: validation.error };
+            return {
+              success: false,
+              error: validation.error,
+              ...(validation.invalidRecipeIds
+                ? { invalidRecipeIds: validation.invalidRecipeIds }
+                : {}),
+              ...(validation.invalidMeals
+                ? { invalidMeals: validation.invalidMeals }
+                : {}),
+            };
           }
-          const enriched = await enrichMealPlanDays(days as MealPlanDay[]);
-          return {
-            type: "mealPlan",
+          const enriched = await enrichMealPlanDays(validation.days);
+
+          return withWeekConflict(
+            {
+              type: "mealPlan",
+              title,
+              startDate,
+              endDate,
+              days: enriched,
+            },
+            userMealPlans
+          );
+        },
+      }),
+
+      saveMealPlan: tool({
+        description:
+          "Uloží jídelní plán do databáze. Jen bez kolize týdne a na výslovnou žádost. Po úspěchu nepiš v chatu ze plán byl ulozen — UI zobrazi potvrzeni samo.",
+        inputSchema: z.object({
+          title: z.string(),
+          startDate: z.string().describe("YYYY-MM-DD"),
+          endDate: z.string().describe("YYYY-MM-DD"),
+          days: mealPlanDaysSchema,
+        }),
+        execute: async ({ title, startDate, endDate, days }) => {
+          const validation = await validateAndResolveMealPlanDays(
+            days as MealPlanDay[]
+          );
+          if (!validation.ok) {
+            return {
+              success: false,
+              error: validation.error,
+              ...(validation.invalidRecipeIds
+                ? { invalidRecipeIds: validation.invalidRecipeIds }
+                : {}),
+              ...(validation.invalidMeals
+                ? { invalidMeals: validation.invalidMeals }
+                : {}),
+            };
+          }
+
+          const dayList = validation.days as MealPlanDay[];
+          const conflict = detectMealPlanWeekConflict(userMealPlans, {
+            startDate,
+            endDate,
+            days: dayList,
+          });
+          if (conflict) {
+            return {
+              success: false,
+              error:
+                "Pro tento týden už existuje uložený plán. Uložení je možné až po zvolení jiného období.",
+              weekConflict: conflict,
+            };
+          }
+
+          const result = await createMealPlanForUser(userId, {
             title,
             startDate,
             endDate,
-            days: enriched,
+            days: dayList,
+          });
+          if (!result.ok) {
+            return { success: false, error: result.error };
+          }
+          return {
+            type: "mealPlanSaved",
+            success: true,
+            planId: result.planId,
+            title: result.title,
+            startDate: result.startDate,
+            endDate: result.endDate,
+            days: result.days,
           };
         },
       }),
 
       createRecipeInDatabase: tool({
         description:
-          "Uloží nový recept do databáze tak, aby ho bylo možné příště najít.",
+          "Uloží nový recept do databáze. Použij jen když uživatelka výslovně chce recept z internetu / mimo katalog — nejdřív recept popiš (nízkohistaminově), pak ulož a použij vrácené recipeId v plánech. Nabídně jí uložení do databáze.",
         inputSchema: z.object({
           name: z.string(),
           description: z.string(),
@@ -240,43 +323,24 @@ export async function POST(req: Request) {
               tags: (tags ?? []).join(","),
             },
           });
+          clearRecipeCatalogCache();
+          clearPlanningCatalogCache();
           return { success: true, recipeId: recipe.id, name };
         },
       }),
     },
     stopWhen: chatStopWhen,
-    onFinish: async ({ response }) => {
+  });
+
+  // Keep streaming on the server after the client disconnects (tab navigation).
+  result.consumeStream();
+
+  return result.toUIMessageStreamResponse({
+    originalMessages: messages,
+    onFinish: async ({ messages: allMessages }) => {
       if (sessionId) {
-        const allMessages = [...messages, ...response.messages];
-        const existing = await prisma.chatSession.findUnique({
-          where: { id: sessionId },
-        });
-        if (existing) {
-          await prisma.chatSession.update({
-            where: { id: sessionId },
-            data: {
-              messages: JSON.stringify(allMessages),
-              updatedAt: new Date(),
-            },
-          });
-        } else {
-          const firstUserMsg = messages.find((m) => m.role === "user");
-          const textPart = firstUserMsg?.parts?.find(
-            (p: { type: string }) => p.type === "text"
-          ) as { type: "text"; text: string } | undefined;
-          const title = textPart?.text?.slice(0, 60) ?? "Nový rozhovor";
-          await prisma.chatSession.create({
-            data: {
-              id: sessionId,
-              userId,
-              title,
-              messages: JSON.stringify(allMessages),
-            },
-          });
-        }
+        await persistChatSession(sessionId, userId, allMessages);
       }
     },
   });
-
-  return result.toUIMessageStreamResponse();
 }

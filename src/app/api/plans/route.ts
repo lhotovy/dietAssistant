@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getUserId } from "@/lib/user";
 import type { MealPlanDay } from "@/types";
+import { createMealPlanForUser } from "@/lib/meal-plan-store";
 import {
   enrichMealPlanDays,
   validateMealPlanRecipeIds,
@@ -43,28 +44,28 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const validation = await validateMealPlanRecipeIds(days);
-  if (!validation.ok) {
-    return NextResponse.json({ error: validation.error }, { status: 400 });
+  const result = await createMealPlanForUser(userId, {
+    title: title.trim(),
+    startDate,
+    endDate,
+    days,
+  });
+
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: 400 });
   }
 
-  const plan = await prisma.mealPlan.create({
-    data: {
-      userId,
-      title: title.trim(),
-      startDate: new Date(startDate),
-      endDate: new Date(endDate),
-      days: JSON.stringify(days),
-    },
+  const plan = await prisma.mealPlan.findFirst({
+    where: { id: result.planId, userId },
   });
 
   return NextResponse.json({
-    id: plan.id,
-    title: plan.title,
-    startDate: plan.startDate,
-    endDate: plan.endDate,
-    days: JSON.parse(plan.days) as MealPlanDay[],
-    createdAt: plan.createdAt,
+    id: result.planId,
+    title: result.title,
+    startDate: plan?.startDate ?? result.startDate,
+    endDate: plan?.endDate ?? result.endDate,
+    days: result.days,
+    createdAt: plan?.createdAt,
   });
 }
 

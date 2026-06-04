@@ -1,16 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { UIMessage } from "ai";
 import { RecipeCard } from "@/components/ui/recipe-card";
 import type { RecipeData } from "@/types";
 import { isMealPlanPayload } from "@/lib/meal-plan-parse";
 import {
-  extractMealPlansFromMessage,
+  extractAssistantSavedMealPlan,
+  extractMealPlanToolError,
+  extractPreparedMealPlans,
   getAssistantDisplayText,
 } from "@/lib/meal-plan-from-message";
-import { stripHiddenJsonBlocks } from "@/lib/message-display";
+import {
+  buildRecipeNameMaps,
+  enrichMealPlanPayloadNames,
+} from "@/lib/meal-plan-enrich-names";
+import { formatMealPlanSummaryMarkdown } from "@/lib/meal-plan-display";
+import { usePlanningCatalog } from "./planning-catalog-provider";
+import {
+  messageClaimsPlanSaved,
+  stripAssistantPlanDisplayText,
+} from "@/lib/message-display";
 import { MealPlanSaveCard } from "./meal-plan-save-card";
+import { MarkdownContent } from "./markdown-content";
 
 interface ChatMessageProps {
   message: UIMessage;
@@ -49,25 +61,6 @@ function isRecipeData(obj: unknown): obj is RecipeData {
   );
 }
 
-function renderText(text: string) {
-  const lines = text.split("\n");
-  return lines.map((line, i) => {
-    const parts = line.split(/(\*\*[^*]+\*\*)/g);
-    return (
-      <span key={i}>
-        {i > 0 && <br />}
-        {parts.map((part, j) =>
-          part.startsWith("**") && part.endsWith("**") ? (
-            <strong key={j}>{part.slice(2, -2)}</strong>
-          ) : (
-            <span key={j}>{part}</span>
-          )
-        )}
-      </span>
-    );
-  });
-}
-
 export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) {
   const [savedRecipes, setSavedRecipes] = useState<Set<string>>(new Set());
 
@@ -89,16 +82,65 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
         .join("") ?? "")
     : getAssistantDisplayText(message);
 
+  const { recipes: catalogRecipes } = usePlanningCatalog();
+  const nameMaps = useMemo(
+    () => buildRecipeNameMaps(catalogRecipes),
+    [catalogRecipes]
+  );
+
   const recipes = isUser ? [] : extractRecipes(fullText);
-  const mealPlans =
-    isUser || isStreaming ? [] : extractMealPlansFromMessage(message);
-  const displayText = isUser ? fullText : stripHiddenJsonBlocks(fullText);
-  const hasPrepareTool = message.parts?.some((p) => {
+  const assistantSaved = isUser ? null : extractAssistantSavedMealPlan(message);
+  const rawMealPlans = isUser ? [] : extractPreparedMealPlans(message);
+  const mealPlans = useMemo(
+    () =>
+      rawMealPlans.map((plan) => enrichMealPlanPayloadNames(plan, nameMaps)),
+    [rawMealPlans, nameMaps]
+  );
+  const prepareToolError = isUser ? null : extractMealPlanToolError(message);
+  const planWasSavedByTool = Boolean(assistantSaved);
+  const savedPlanEnriched = useMemo(
+    () =>
+      assistantSaved
+        ? {
+            ...assistantSaved,
+            plan: enrichMealPlanPayloadNames(assistantSaved.plan, nameMaps),
+          }
+        : null,
+    [assistantSaved, nameMaps]
+  );
+  const planForSummary =
+    mealPlans[0] ?? savedPlanEnriched?.plan ?? null;
+  const summaryFromTool = planForSummary
+    ? formatMealPlanSummaryMarkdown(planForSummary)
+    : "";
+
+  const strippedText = isUser
+    ? fullText
+    : stripAssistantPlanDisplayText(fullText, {
+        planWasSavedByTool,
+        hasPreparedPlanFromTool: mealPlans.length > 0,
+        hidePhantomWeeklyPlan:
+          mealPlans.length > 0 || Boolean(prepareToolError),
+      });
+
+  const displayText =
+    isUser || strippedText.trim().length > 0
+      ? strippedText
+      : summaryFromTool;
+  const falseSaveClaimInText =
+    !isUser &&
+    !isStreaming &&
+    !planWasSavedByTool &&
+    messageClaimsPlanSaved(fullText);
+  const hasMealPlanTool = message.parts?.some((p) => {
     if (typeof p !== "object" || p === null) return false;
     const r = p as Record<string, unknown>;
     const type = String(r.type ?? "");
     return (
-      type.includes("prepareMealPlan") || r.toolName === "prepareMealPlan"
+      type.includes("prepareMealPlan") ||
+      type.includes("saveMealPlan") ||
+      r.toolName === "prepareMealPlan" ||
+      r.toolName === "saveMealPlan"
     );
   });
 
@@ -111,7 +153,7 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
     !isStreaming &&
     mealPlans.length === 0 &&
     looksLikeWeeklyPlan &&
-    !hasPrepareTool;
+    !hasMealPlanTool;
 
   const handleSaveToFavorites = async (recipe: RecipeData) => {
     try {
@@ -133,7 +175,12 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
     }
   };
 
-  if (!displayText && recipes.length === 0 && mealPlans.length === 0)
+  if (
+    !displayText &&
+    recipes.length === 0 &&
+    mealPlans.length === 0 &&
+    !assistantSaved
+  )
     return null;
 
   return (
@@ -147,8 +194,21 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
           <div className="space-y-3">
             {displayText && (
               <div className="bg-stone-50 rounded-2xl rounded-tl-sm px-4 py-3 text-base text-stone-800 leading-relaxed">
-                {renderText(displayText)}
+                <MarkdownContent text={displayText} />
               </div>
+            )}
+            {savedPlanEnriched && (
+              <MealPlanSaveCard
+                key={`meal-plan-saved-${savedPlanEnriched.planId}`}
+                plan={savedPlanEnriched.plan}
+                alreadySaved
+              />
+            )}
+            {falseSaveClaimInText && mealPlans.length > 0 && (
+              <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 leading-relaxed">
+                Plán zatím není uložen v databázi — uložte ho tlačítkem níže, nebo
+                požádejte asistentku: „ulož plán“.
+              </p>
             )}
             {mealPlans.map((plan, i) => (
               <MealPlanSaveCard
@@ -156,10 +216,15 @@ export function ChatMessage({ message, isStreaming = false }: ChatMessageProps) 
                 plan={plan}
               />
             ))}
-            {prepareIncomplete && (
+            {prepareToolError && mealPlans.length === 0 && (
+              <p className="text-base text-red-700 bg-red-50 rounded-xl px-4 py-3">
+                {prepareToolError}
+              </p>
+            )}
+            {prepareIncomplete && !prepareToolError && (
               <p className="text-base text-amber-700 bg-amber-50 rounded-xl px-4 py-3">
-                Plán zatím nelze uložit — odpověď nebyla dokončena. Požádej znovu:
-                „Dokonči plán pro uložení podle katalogu receptů.“
+                Plán zatím nelze uložit — chybí volání nástroje pro uložení. Požádej:
+                „Dokonči plán a připrav ho k uložení podle katalogu receptů.“
               </p>
             )}
             {recipes.map((recipe, i) => (

@@ -4,10 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import { CalendarDays, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { mealPlanConflictUserMessage } from "@/lib/meal-plan-conflicts";
 import type { MealPlanPayload } from "@/lib/meal-plan-parse";
 
 interface MealPlanSaveCardProps {
   plan: MealPlanPayload;
+  /** Plan was already persisted (e.g. via saveMealPlan tool). */
+  alreadySaved?: boolean;
 }
 
 function formatDateRange(start: string, end: string): string {
@@ -22,14 +25,20 @@ function formatDateRange(start: string, end: string): string {
   return `${fmt(start)} – ${fmt(end)}`;
 }
 
-export function MealPlanSaveCard({ plan }: MealPlanSaveCardProps) {
+export function MealPlanSaveCard({
+  plan,
+  alreadySaved = false,
+}: MealPlanSaveCardProps) {
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(alreadySaved);
   const [error, setError] = useState<string | null>(null);
 
   const mealCount = plan.days.reduce((n, d) => n + d.meals.length, 0);
+  const hasWeekConflict = Boolean(plan.weekConflict);
+  const saveDisabled = hasWeekConflict || saving;
 
   const handleSave = async () => {
+    if (hasWeekConflict) return;
     setSaving(true);
     setError(null);
     try {
@@ -88,12 +97,22 @@ export function MealPlanSaveCard({ plan }: MealPlanSaveCardProps) {
         </div>
       ) : (
         <div className="space-y-2">
+          {hasWeekConflict && plan.weekConflict && (
+            <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 leading-relaxed">
+              {mealPlanConflictUserMessage(plan.weekConflict)}
+            </p>
+          )}
           <Button
             variant="primary"
             size="md"
             className="w-full"
             onClick={handleSave}
-            disabled={saving}
+            disabled={saveDisabled}
+            title={
+              hasWeekConflict
+                ? "Nejdřív vyřeš kolizi týdne v rozhovoru"
+                : undefined
+            }
           >
             {saving ? (
               <>

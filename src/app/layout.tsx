@@ -33,8 +33,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="cs">
-      <body className={`${geist.variable} antialiased bg-stone-50`}>
+    <html lang="cs" suppressHydrationWarning>
+      <body
+        className={`${geist.variable} antialiased bg-stone-50`}
+        suppressHydrationWarning
+      >
         {children}
       </body>
     </html>

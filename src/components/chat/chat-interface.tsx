@@ -7,6 +7,8 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import { Send, Loader2, Plus, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ChatMessage } from "./chat-message";
+import { extractPreparedMealPlans } from "@/lib/meal-plan-from-message";
+import { usePlanningCatalog } from "./planning-catalog-provider";
 import { cn } from "@/lib/utils";
 
 const QUICK_PROMPTS = [
@@ -39,13 +41,16 @@ export function ChatInterface({
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const { version: catalogVersion, ready: catalogReady, loading: catalogLoading, refetch: refetchCatalog } =
+    usePlanningCatalog();
+
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: "/api/chat",
-        body: { sessionId },
+        body: { sessionId, catalogVersion },
       }),
-    [sessionId]
+    [sessionId, catalogVersion]
   );
 
   const { messages, sendMessage, status } = useChat({
@@ -55,6 +60,22 @@ export function ChatInterface({
 
   const prevStatusRef = useRef(status);
   const isLoading = status === "submitted" || status === "streaming";
+
+  const lastAssistant = [...messages]
+    .reverse()
+    .find((m) => m.role === "assistant");
+  const planningMealPlan =
+    isLoading &&
+    lastAssistant?.parts?.some((p) => {
+      if (typeof p !== "object" || p === null) return false;
+      const r = p as Record<string, unknown>;
+      const type = String(r.type ?? "");
+      return (
+        type.includes("prepareMealPlan") &&
+        r.state !== "output-available" &&
+        r.state !== "output-error"
+      );
+    });
 
   useEffect(() => {
     if (!shouldAutoScrollRef.current) return;
@@ -78,6 +99,25 @@ export function ChatInterface({
     }
     prevStatusRef.current = status;
   }, [status, messages.length, onSessionsChange]);
+
+  useEffect(() => {
+    if (status !== "ready" || messages.length === 0) return;
+    const last = messages[messages.length - 1];
+    if (last.role !== "assistant") return;
+    const createdRecipe = last.parts?.some((p) => {
+      if (typeof p !== "object" || p === null) return false;
+      const r = p as Record<string, unknown>;
+      const type = String(r.type ?? "");
+      if (!type.includes("createRecipeInDatabase")) return false;
+      const out = r.output ?? r.result;
+      return (
+        out &&
+        typeof out === "object" &&
+        (out as { success?: boolean }).success === true
+      );
+    });
+    if (createdRecipe) void refetchCatalog();
+  }, [status, messages, refetchCatalog]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -177,10 +217,26 @@ export function ChatInterface({
           />
         ))}
 
-        {isLoading && (
+        {catalogLoading && !catalogReady && (
+          <p className="text-xs text-stone-400 px-1">
+            Načítám katalog receptů…
+          </p>
+        )}
+
+        {isLoading &&
+          !(
+            lastAssistant &&
+            extractPreparedMealPlans(lastAssistant).length > 0
+          ) && (
           <div className="flex items-center gap-2 text-stone-400 text-base px-1">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Přemýšlím…</span>
+            <span>
+              {planningMealPlan
+                ? "Sestavuji jídelní plán…"
+                : !catalogReady
+                  ? "Načítám katalog receptů…"
+                  : "Přemýšlím…"}
+            </span>
           </div>
         )}
 

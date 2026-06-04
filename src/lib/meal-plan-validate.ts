@@ -1,10 +1,15 @@
+import {
+  buildRecipeNameMaps,
+  resolveRecipeDisplayName,
+} from "@/lib/meal-plan-enrich-names";
+import { prepareMealPlanDaysForTools } from "@/lib/meal-plan-recipe-resolve";
+import type { InvalidMealPlanRecipe } from "@/lib/meal-plan-recipe-resolve";
+import { getRecipeCatalogIndex } from "@/lib/recipe-catalog-match";
 import type { MealPlanDay } from "@/types";
-import { prisma } from "@/lib/prisma";
 
 type MealInput = {
   recipeId?: string;
   type: string;
-  recipeName?: string;
 };
 
 type DayInput = { date: string; meals: MealInput[] };
@@ -19,16 +24,20 @@ export function collectMealRecipeIds(days: DayInput[]): string[] {
   return ids;
 }
 
+/** Attach display names from DB; never trust model-supplied names. */
 export async function enrichMealPlanDays(days: DayInput[]): Promise<MealPlanDay[]> {
-  const ids = collectMealRecipeIds(days);
-  const recipes =
-    ids.length > 0
-      ? await prisma.recipe.findMany({
-          where: { id: { in: ids } },
-          select: { id: true, name: true },
-        })
-      : [];
-  const nameById = new Map(recipes.map((r) => [r.id, r.name]));
+  const index = await getRecipeCatalogIndex();
+  const maps = buildRecipeNameMaps(
+    index.recipes.map((r) => ({
+      id: r.id,
+      name: r.name,
+      slug: r.slug,
+      mealTypes: r.mealTypes,
+      description: "",
+      ingredientNames: [],
+      isFavorite: false,
+    }))
+  );
 
   return days.map((day) => ({
     date: day.date,
@@ -37,14 +46,43 @@ export async function enrichMealPlanDays(days: DayInput[]): Promise<MealPlanDay[
       if (!meal.recipeId) {
         return { type };
       }
-      return {
-        type,
-        recipeId: meal.recipeId,
-        recipeName:
-          nameById.get(meal.recipeId) ?? meal.recipeName ?? "Neznámý recept",
-      };
+      const canonicalId = maps.idBySlug.get(meal.recipeId) ?? meal.recipeId;
+      const recipeName =
+        resolveRecipeDisplayName(meal.recipeId, maps) ?? "Neznámý recept";
+      return { type, recipeId: canonicalId, recipeName };
     }),
   }));
+}
+
+/** Resolve slugs → ids, validate ids exist in DB. */
+export async function validateAndResolveMealPlanDays(
+  days: DayInput[],
+  options?: { allowEmptySlots?: boolean }
+): Promise<
+  | { ok: true; days: DayInput[] }
+  | {
+      ok: false;
+      error: string;
+      invalidRecipeIds?: string[];
+      invalidMeals?: InvalidMealPlanRecipe[];
+    }
+> {
+  const resolved = await prepareMealPlanDaysForTools(days as MealPlanDay[]);
+  if (!resolved.ok) {
+    return {
+      ok: false,
+      error: resolved.error,
+      invalidRecipeIds: resolved.invalidRecipeIds,
+      invalidMeals: resolved.invalidMeals,
+    };
+  }
+
+  const validation = await validateMealPlanRecipeIds(resolved.days, options);
+  if (!validation.ok) {
+    return validation;
+  }
+
+  return { ok: true, days: resolved.days };
 }
 
 export async function validateMealPlanRecipeIds(
@@ -58,14 +96,14 @@ export async function validateMealPlanRecipeIds(
     if (ids.length === 0) {
       return {
         ok: false,
-        error: "Každé jídlo v plánu musí mít recipeId z databáze.",
+        error: "Každé jídlo v plánu musí mít recipeId z katalogu (id nebo slug).",
       };
     }
 
     if (ids.length !== mealCount) {
       return {
         ok: false,
-        error: "Některá jídla nemají recipeId — použij pouze recepty z databáze.",
+        error: "Některá jídla nemají recipeId — použij id/slug z katalogu.",
       };
     }
   } else if (ids.length > mealCount) {
@@ -80,16 +118,15 @@ export async function validateMealPlanRecipeIds(
   }
 
   const unique = [...new Set(ids)];
-  const found = await prisma.recipe.findMany({
-    where: { id: { in: unique } },
-    select: { id: true },
-  });
+  const { validIds } = await getRecipeCatalogIndex();
 
-  if (found.length !== unique.length) {
-    return {
-      ok: false,
-      error: "Plán obsahuje neplatné recipeId — znovu vyhledej recepty v databázi.",
-    };
+  for (const id of unique) {
+    if (!validIds.has(id)) {
+      return {
+        ok: false,
+        error: "Plán obsahuje neplatné recipeId — použij id/slug z katalogu.",
+      };
+    }
   }
 
   return { ok: true };
