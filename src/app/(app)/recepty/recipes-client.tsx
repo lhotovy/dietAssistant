@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Search, UtensilsCrossed } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { RecipeCard } from "@/components/ui/recipe-card";
 import { cn } from "@/lib/utils";
 import type { MealType, RecipeData } from "@/types";
@@ -20,6 +21,8 @@ export function RecipesClient() {
   const [favoriteRecipeIds, setFavoriteRecipeIds] = useState<Set<string>>(
     new Set()
   );
+  const [recipeToDelete, setRecipeToDelete] = useState<RecipeData | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const timeout = setTimeout(() => setDebouncedQuery(query.trim()), 300);
@@ -110,6 +113,29 @@ export function RecipesClient() {
     }
   }
 
+  async function handleConfirmDelete() {
+    if (!recipeToDelete) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/recipes/${recipeToDelete.slug}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setRecipes((prev) => prev.filter((r) => r.id !== recipeToDelete.id));
+        setFavoriteRecipeIds((prev) => {
+          const next = new Set(prev);
+          next.delete(recipeToDelete.id);
+          return next;
+        });
+        setRecipeToDelete(null);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="px-4 py-3 border-b border-stone-100 bg-white shrink-0">
@@ -195,12 +221,28 @@ export function RecipesClient() {
                 recipe={recipe}
                 compact
                 onSaveToFavorites={handleSaveToFavorites}
+                onDelete={setRecipeToDelete}
                 isFavorite={favoriteRecipeIds.has(recipe.id)}
               />
             ))}
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={recipeToDelete !== null}
+        title="Smazat recept?"
+        description={
+          recipeToDelete
+            ? `Opravdu chceš smazat „${recipeToDelete.name}"? Tuto akci nelze vrátit.`
+            : ""
+        }
+        loading={deleting}
+        onConfirm={() => void handleConfirmDelete()}
+        onCancel={() => {
+          if (!deleting) setRecipeToDelete(null);
+        }}
+      />
     </div>
   );
 }

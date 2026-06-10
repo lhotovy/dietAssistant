@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronUp,
   Heart,
+  Trash2,
 } from "lucide-react";
 import { Button } from "./button";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,7 @@ import { MEAL_TYPE_LABELS, type MealType } from "@/types";
 interface RecipeCardProps {
   recipe: RecipeData;
   onSaveToFavorites?: (recipe: RecipeData) => void;
+  onDelete?: (recipe: RecipeData) => void;
   isFavorite?: boolean;
   compact?: boolean;
 }
@@ -24,6 +26,7 @@ interface RecipeCardProps {
 export function RecipeCard({
   recipe,
   onSaveToFavorites,
+  onDelete,
   isFavorite = false,
   compact = false,
 }: RecipeCardProps) {
@@ -45,22 +48,39 @@ export function RecipeCard({
               {recipe.name}
             </h3>
           </div>
-          {onSaveToFavorites && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onSaveToFavorites(recipe)}
-              className={cn(
-                "flex-shrink-0",
-                isFavorite ? "text-red-500" : "text-stone-400"
+          {(onSaveToFavorites || onDelete) && (
+            <div className="flex shrink-0 items-center gap-0.5">
+              {onDelete && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onDelete(recipe)}
+                  className="text-stone-400 hover:text-red-500"
+                  title="Smazat recept"
+                  aria-label="Smazat recept"
+                >
+                  <Trash2 className="h-5 w-5" />
+                </Button>
               )}
-              title={isFavorite ? "Odebrat z oblíbených" : "Přidat do oblíbených"}
-            >
-              <Heart
-                className="h-5 w-5"
-                fill={isFavorite ? "currentColor" : "none"}
-              />
-            </Button>
+              {onSaveToFavorites && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onSaveToFavorites(recipe)}
+                  className={cn(
+                    isFavorite ? "text-red-500" : "text-stone-400"
+                  )}
+                  title={
+                    isFavorite ? "Odebrat z oblíbených" : "Přidat do oblíbených"
+                  }
+                >
+                  <Heart
+                    className="h-5 w-5"
+                    fill={isFavorite ? "currentColor" : "none"}
+                  />
+                </Button>
+              )}
+            </div>
           )}
         </div>
 
@@ -115,7 +135,7 @@ export function RecipeCard({
                   className="flex items-baseline justify-between text-sm"
                 >
                   <span className="text-stone-700">{ing.name}</span>
-                  <span className="text-stone-500 ml-2 flex-shrink-0">
+                  <span className="text-stone-500 ml-2 shrink-0">
                     {ing.amount} {ing.unit}
                   </span>
                 </li>
@@ -130,7 +150,7 @@ export function RecipeCard({
             <ol className="space-y-2">
               {recipe.instructions.map((step, i) => (
                 <li key={i} className="flex gap-3 text-sm">
-                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-green-100 text-green-700 text-xs font-semibold flex items-center justify-center mt-0.5">
+                  <span className="shrink-0 w-5 h-5 rounded-full bg-green-100 text-green-700 text-xs font-semibold flex items-center justify-center mt-0.5">
                     {i + 1}
                   </span>
                   <span className="text-stone-700 leading-relaxed">{step}</span>
