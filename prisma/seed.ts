@@ -1321,6 +1321,42 @@ const recipes = [
     servings: 2,
     tags: "obed,vecere,bezlepkove,vegetarianke,rychle",
   },
+  {
+    name: "Jáhlové škubánky s mákem a švestkovým přelivem",
+    description:
+      "Bezlepkové jáhlové škubánky s mákem a rozvařenými švestkami. Mák, švestky i skořice jsou pro histaminovou intoleranci hraniční — sledujte vlastní toleranci. Lze podávat i jen s máslem a cukrem.",
+    mealTypes: "dessert,svacina",
+    ingredients: [
+      { name: "Jáhly", amount: 150, unit: "g" },
+      { name: "Voda", amount: 250, unit: "ml" },
+      { name: "Kokosové mléko", amount: 150, unit: "ml" },
+      { name: "Skořice", amount: 0.5, unit: "lžičky" },
+      { name: "Sůl", amount: 1, unit: "lžička" },
+      { name: "Kukuřičná mouka hladká", amount: 150, unit: "g" },
+      { name: "Bezlepkový vanilkový puding", amount: 1, unit: "ks" },
+      { name: "Kokosový olej", amount: 1, unit: "lžíce" },
+      { name: "Švestky", amount: 500, unit: "g" },
+      { name: "Třtinový cukr", amount: 3, unit: "lžíce" },
+      { name: "Mák čerstvě mletý", amount: 80, unit: "g" },
+    ],
+    instructions: [
+      "Jáhly propláchněte ve studené vodě, vodu slijte a dvakrát je spařte vroucí vodou.",
+      "Vsypte je do 250 ml osolené vody a vařte 10 minut pod pokličkou.",
+      "Přimíchejte skořici, přilijte kokosové mléko, sundejte z ohně a nechte pod pokličkou dojít. Před přípravou těsta nechte jáhly vychladnout, ideálně přes noc.",
+      "Švestky omyjte, vypeckujte, nakrájejte a poduste s pár lžícemi vody a třtinovým cukrem, dokud se nerozvaří.",
+      "Namelete mák.",
+      "K vychladlým jáhlům vmíchejte kukuřičnou mouku a vanilkový puding a vypracujte pevné těsto.",
+      "Těsto natrhejte nebo vyválejte na menší kousky.",
+      "Škubánky vhoďte do osolené vroucí vody a vybírejte je hned, jak vyplavou na hladinu, nejdéle po 5 minutách, ať se nerozvaří.",
+      "Nechte je okapat. Na pánvi rozehřejte kokosový olej a škubánky krátce osmahněte.",
+      "Podávejte hned, posypané mákem a se švestkovým přelivem. Podle chuti doslaďte. Na druhý den tvrdnou.",
+    ],
+    prepTime: 25,
+    cookTime: 35,
+    servings: 4,
+    tags: "dessert,svacina,bezlepkove,vegetarianke,hranicni",
+    source: "https://aspoonofhistamine.com/2013/09/27/jahlove-skubanky-s-makem-a-svestkovym-prelivem/",
+  },
 ];
 
 async function main() {
@@ -1341,6 +1377,7 @@ async function main() {
         cookTime: recipe.cookTime,
         servings: recipe.servings,
         tags: recipe.tags,
+        ...("source" in recipe ? { source: recipe.source } : {}),
       },
       update: {
         description: recipe.description,
@@ -1350,6 +1387,7 @@ async function main() {
         cookTime: recipe.cookTime,
         servings: recipe.servings,
         tags: recipe.tags,
+        ...("source" in recipe ? { source: recipe.source } : {}),
       },
     });
   }
@@ -1369,6 +1407,10 @@ async function main() {
     { name: "Pohanka", histamineLevel: "SAFE", category: "obiloviny", notes: null },
     { name: "Quinoa", histamineLevel: "SAFE", category: "obiloviny", notes: null },
     { name: "Jáhly", histamineLevel: "SAFE", category: "obiloviny", notes: null },
+    { name: "Kukuřičná mouka", histamineLevel: "SAFE", category: "obiloviny", notes: null },
+    { name: "Kokosové mléko", histamineLevel: "SAFE", category: "mlecne", notes: "Neslazené, bez přísad" },
+    { name: "Švestky", histamineLevel: "MODERATE", category: "ovoce", notes: "Čerstvé; na hraně histaminové intolerance" },
+    { name: "Mák", histamineLevel: "MODERATE", category: "ostatni", notes: "Čerstvě mletý; na hraně histaminové intolerance" },
     { name: "Ovesné vločky", histamineLevel: "SAFE", category: "obiloviny", notes: null },
     { name: "Brambory", histamineLevel: "SAFE", category: "zelenina", notes: null },
     { name: "Mrkev", histamineLevel: "SAFE", category: "zelenina", notes: null },
