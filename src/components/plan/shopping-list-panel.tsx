@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ClipboardCopy, ShoppingBasket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ShoppingListItem } from "@/lib/shopping-list";
+import { ShoppingAssistantPanel } from "@/components/plan/shopping-assistant-panel";
 
 type ShoppingListResponse = {
   items: ShoppingListItem[];
@@ -89,7 +90,7 @@ export function ShoppingListPanel({ planId, planVersion }: { planId: string; pla
           {result.items.length === 0 ? (
             <p className="text-sm text-stone-500">V plánu nejsou žádné suroviny.</p>
           ) : (
-            <ul className="space-y-1.5">
+            <><ul className="space-y-1.5">
               {result.items.map((item) => (
                 <li key={item.key}>
                   <label className="flex gap-2 items-start text-sm text-stone-700">
@@ -105,7 +106,7 @@ export function ShoppingListPanel({ planId, planVersion }: { planId: string; pla
                   </label>
                 </li>
               ))}
-            </ul>
+            </ul><ShoppingAssistantPanel key={`${planId}:${planVersion}:${servings}`} items={result.items} /></>
           )}
         </>
       )}

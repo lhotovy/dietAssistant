@@ -11,7 +11,8 @@
     "seed": "tsx prisma/seed.ts",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "test:shopping": "tsx --test tests/shopping.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
