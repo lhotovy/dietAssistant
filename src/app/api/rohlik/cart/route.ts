@@ -41,6 +41,6 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json(result);
   } catch (cause) {
-    return NextResponse.json({ error: cause instanceof Error ? cause.message : "Vložení do košíku selhalo." }, { status: 502 });
+    return NextResponse.json({ error: `${cause instanceof Error ? cause.message : "Vložení do košíku selhalo."} Před opakováním zkontroluj košík Rohlik.` }, { status: 502 });
   }
 }

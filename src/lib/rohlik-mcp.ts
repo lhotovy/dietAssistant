@@ -98,7 +98,11 @@ export async function callRohlikTool(name: string, argumentsWithoutConversation:
   const decoded = decodeToolResult(result.result);
   const conversationId = extractConversationId(decoded) ?? extractConversationId(result.result);
   if (conversationId && conversationId !== credentials.conversationId) {
-    await saveRohlikConversationId(connection.id, credentials, conversationId);
+    try {
+      await saveRohlikConversationId(connection.id, credentials, conversationId);
+    } catch {
+      // The tool may already have changed the cart. Preserve its response.
+    }
   }
   return decoded;
 }
