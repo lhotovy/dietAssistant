@@ -85,7 +85,7 @@ model UserPlanningProfile {
 
 model RohlikConnection {
   id          String   @id // SHA-256 of the random, httpOnly connection cookie
-  credentials String   // AES-256-GCM encrypted OAuth tokens and client registration
+  credentials String   // AES-256-GCM encrypted OAuth tokens or legacy MCP login credentials
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

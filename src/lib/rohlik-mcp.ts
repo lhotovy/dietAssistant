@@ -1,12 +1,12 @@
-import { getRohlikConnection, saveRohlikConversationId } from "@/lib/rohlik-oauth";
+import { getRohlikConnection, saveRohlikConversationId, type LegacyRohlikCredentials, type RohlikCredentials } from "@/lib/rohlik-oauth";
 
 const MCP_URL = "https://mcp.rohlik.cz/mcp";
 type JsonRpcResult = { jsonrpc: "2.0"; id?: number; result?: unknown; error?: { message?: string } };
 
-async function parseMcpResponse(response: Response, id: number): Promise<JsonRpcResult> {
+async function parseMcpResponse(response: Response, id: number, legacy: boolean): Promise<JsonRpcResult> {
   const contentType = response.headers.get("content-type") ?? "";
   const raw = await response.text();
-  if (!response.ok) throw new Error(response.status === 401 ? "Připojení Rohlik vypršelo. Připoj účet znovu." : `Rohlik MCP vrátil HTTP ${response.status}.`);
+  if (!response.ok) throw new Error(response.status === 401 ? (legacy ? "Rohlik odmítl legacy přihlášení. Odpoj a připoj účet znovu." : "Připojení Rohlik vypršelo. Připoj účet znovu.") : `Rohlik MCP vrátil HTTP ${response.status}.`);
   if (contentType.includes("text/event-stream")) {
     const events = raw.split(/\r?\n\r?\n/);
     for (const event of events) {
@@ -20,11 +20,17 @@ async function parseMcpResponse(response: Response, id: number): Promise<JsonRpc
   return JSON.parse(raw) as JsonRpcResult;
 }
 
-async function request(token: string, method: string, params: unknown, id: number, sessionId?: string): Promise<{ result: unknown; sessionId?: string }> {
+function authHeaders(credentials: RohlikCredentials): Record<string, string> {
+  return credentials.kind === "legacy"
+    ? { "rhl-email": credentials.email, "rhl-pass": credentials.password }
+    : { Authorization: `Bearer ${credentials.accessToken}` };
+}
+
+async function request(credentials: RohlikCredentials, method: string, params: unknown, id: number, sessionId?: string): Promise<{ result: unknown; sessionId?: string }> {
   const response = await fetch(MCP_URL, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${token}`,
+      ...authHeaders(credentials),
       Accept: "application/json, text/event-stream",
       "Content-Type": "application/json",
       "MCP-Protocol-Version": "2025-06-18",
@@ -34,16 +40,16 @@ async function request(token: string, method: string, params: unknown, id: numbe
     cache: "no-store",
     signal: AbortSignal.timeout(30000),
   });
-  const rpc = await parseMcpResponse(response, id);
+  const rpc = await parseMcpResponse(response, id, credentials.kind === "legacy");
   if (rpc.error) throw new Error(rpc.error.message ?? "Rohlik MCP volání selhalo.");
   return { result: rpc.result, sessionId: response.headers.get("Mcp-Session-Id") ?? sessionId };
 }
 
-async function notifyInitialized(token: string, sessionId?: string): Promise<void> {
+async function notifyInitialized(credentials: RohlikCredentials, sessionId?: string): Promise<void> {
   const response = await fetch(MCP_URL, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${token}`,
+      ...authHeaders(credentials),
       Accept: "application/json, text/event-stream",
       "Content-Type": "application/json",
       "MCP-Protocol-Version": "2025-06-18",
@@ -82,13 +88,13 @@ export async function callRohlikTool(name: string, argumentsWithoutConversation:
   const connection = await getRohlikConnection();
   if (!connection) throw new Error("Nejdříve připoj účet Rohlik.");
   const { credentials } = connection;
-  const initialized = await request(credentials.accessToken, "initialize", {
+  const initialized = await request(credentials, "initialize", {
     protocolVersion: "2025-06-18",
     capabilities: {},
     clientInfo: { name: "diet-assistant", version: "0.1.0" },
   }, 1);
-  await notifyInitialized(credentials.accessToken, initialized.sessionId);
-  const result = await request(credentials.accessToken, "tools/call", {
+  await notifyInitialized(credentials, initialized.sessionId);
+  const result = await request(credentials, "tools/call", {
     name,
     arguments: {
       ...argumentsWithoutConversation,
@@ -105,4 +111,17 @@ export async function callRohlikTool(name: string, argumentsWithoutConversation:
     }
   }
   return decoded;
+}
+
+export async function verifyLegacyRohlikCredentials(credentials: LegacyRohlikCredentials): Promise<void> {
+  const initialized = await request(credentials, "initialize", {
+    protocolVersion: "2025-06-18",
+    capabilities: {},
+    clientInfo: { name: "diet-assistant", version: "0.1.0" },
+  }, 1);
+  await notifyInitialized(credentials, initialized.sessionId);
+  const listed = await request(credentials, "tools/list", {}, 2, initialized.sessionId);
+  if (!listed.result || typeof listed.result !== "object" || !("tools" in listed.result)) {
+    throw new Error("Rohlik nepotvrdil legacy MCP připojení.");
+  }
 }

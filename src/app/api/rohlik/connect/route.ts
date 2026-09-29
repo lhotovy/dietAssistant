@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { beginRohlikAuthorization, rohlikConfigured, RohlikRegistrationError } from "@/lib/rohlik-oauth";
+import { beginRohlikAuthorization, rohlikOAuthConfigured, RohlikRegistrationError } from "@/lib/rohlik-oauth";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  if (!rohlikConfigured()) {
+  if (!rohlikOAuthConfigured()) {
     return NextResponse.json({ error: "Připojení Rohlik není nakonfigurované." }, { status: 503 });
   }
   try {
