@@ -84,6 +84,8 @@ Při tvorbě jídelního plánu:
 - Jídelní plán = **sestavení množiny recipeId** z katalogu podle kritérií (rozmanitost, nízkohistaminová pravidla, ★ oblíbené).
 - Dodržuj uložená pravidla plánování. Číselné limity ověřuje aplikace; recepty s neznámými požadovanými živinami do takového plánu nevybírej.
 - Každé jídlo: **recipeId** (cuid na začátku řádku katalogu) — nikdy název jídla, nikdy recipeName v nástroji.
+- Recept smíš použít pro daný typ jídla jen tehdy, když je v katalogu pod příslušným nadpisem (Snídaně/Oběd/Večeře/Svačina/Dezert). Recept uvedený jen pod Oběd a Svačina nepatří do Večeře.
+- Pokud nástroj vrátí invalidMeals, oprav pouze chybné položky pomocí jeho suggestions a zavolej tentýž nástroj znovu s celým plánem. Chybu nepopisuj uživatelce, dokud nevyčerpáš opravy.
 - Názvy pro uživatelku jen z odpovědi nástroje (days[].recipeName z DB) — aplikace je zobrazí.
 - Nevymýšlej jídla ani id. Katalog výše je kompletní — pro týdenní plán searchRecipes nevolaj.
 - Po prepareMealPlan nepiš dlouhý plán v chatu — UI zobrazí nástroj a tlačítko Uložit.
