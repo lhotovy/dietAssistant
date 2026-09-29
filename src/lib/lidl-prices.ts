@@ -62,13 +62,23 @@ export function findLidlOffers(offers: LidlOffer[], query: string, limit = 5): L
 }
 
 export async function searchLidlPrices(query: string): Promise<{ offers: LidlOffer[]; sources: string[]; errors: number }> {
+  const catalog = await loadLidlCatalog();
+  return { offers: findLidlOffers(catalog.offers, query), sources: catalog.sources, errors: catalog.errors };
+}
+
+export async function searchLidlPricesBatch(queries: string[]): Promise<{ offers: LidlOffer[][]; sources: string[]; errors: number }> {
+  const catalog = await loadLidlCatalog();
+  return { offers: queries.map((query) => findLidlOffers(catalog.offers, query)), sources: catalog.sources, errors: catalog.errors };
+}
+
+async function loadLidlCatalog(): Promise<{ offers: LidlOffer[]; sources: string[]; errors: number }> {
   const fetchedAt = new Date().toISOString();
   const results = await Promise.allSettled(PAGES.map(async (page) => {
     return parseLidlOffers(await fetchLidlPage(page), page, fetchedAt);
   }));
   const offers = results.flatMap((result) => result.status === "fulfilled" ? result.value : []);
   const unique = [...new Map(offers.map((offer) => [offer.productId, offer])).values()];
-  return { offers: findLidlOffers(unique, query), sources: PAGES, errors: results.filter((result) => result.status === "rejected").length };
+  return { offers: unique, sources: PAGES, errors: results.filter((result) => result.status === "rejected").length };
 }
 
 const pageCache = new Map<string, { html: string; fetchedAt: number }>();

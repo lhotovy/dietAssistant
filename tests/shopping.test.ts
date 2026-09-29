@@ -5,6 +5,7 @@ import { priceForNeed } from "../src/lib/package-price";
 import { extractRohlikProducts } from "../src/lib/rohlik-products";
 import { buildShoppingList, normalizeShoppingListKey, shoppingListItemKey } from "../src/lib/shopping-list";
 import { isRelevantProduct } from "../src/lib/product-relevance";
+import { selectShoppingChoice } from "../src/lib/shopping-selection";
 
 test("Lidl card parser reads priced store products", () => {
   const product = JSON.stringify({ productId: 123, title: "Trvanlivé mléko 1,5%", price: { price: 12.9, packaging: { text: "1 l" } }, canonicalUrl: "/p/mleko/p123", store: true });
@@ -64,4 +65,22 @@ test("ingredient matching excludes prepared sweet-potato dishes", () => {
   assert.equal(isRelevantProduct("Batáty", "Batátové hranolky"), false);
   assert.equal(isRelevantProduct("Brambory", "Bramborové krokety"), false);
   assert.equal(isRelevantProduct("Mléko", "Kokosové mléko 1 l"), false);
+});
+
+test("automatic selection compares package totals and respects a saved brand", () => {
+  const item = { key: shoppingListItemKey("Mléko", "ml"), name: "Mléko", amount: 1500, unit: "ml" };
+  const cheap = { productId: 1, name: "Mléko levné 1 l", priceCzk: 18, inStock: true, favorite: false };
+  const preferred = { productId: 2, name: "Mléko oblíbené 1 l", priceCzk: 30, inStock: true, favorite: false };
+  const lidl = { productId: 3, name: "Mléko 1 l", priceCzk: 17, packaging: "1 l", url: "https://www.lidl.cz/p/example", fetchedAt: "", page: "" };
+  const offers = { rohlik: [cheap, preferred], lidl: [lidl], preferredProductId: null };
+  assert.deepEqual(selectShoppingChoice(item, offers), { store: "lidl", product: lidl, quantity: 2, totalCzk: 34, reason: "price" });
+  assert.deepEqual(selectShoppingChoice(item, { ...offers, preferredProductId: 2 }), { store: "rohlik", product: preferred, quantity: 2, totalCzk: 60, reason: "preference" });
+  assert.equal(selectShoppingChoice(item, { ...offers, error: "lookup failed" }), null);
+});
+
+test("automatic selection leaves unrelated or unmeasurable goods unresolved", () => {
+  const item = { key: shoppingListItemKey("Batáty", "g"), name: "Batáty", amount: 500, unit: "g" };
+  const rohlik = { productId: 1, name: "Burger gnocchi s batáty 500 g", priceCzk: 40, inStock: true, favorite: false };
+  const lidl = { productId: 2, name: "Batáty", priceCzk: 30, packaging: "", url: "https://www.lidl.cz/p/example", fetchedAt: "", page: "" };
+  assert.equal(selectShoppingChoice(item, { rohlik: [rohlik], lidl: [lidl], preferredProductId: null }), null);
 });

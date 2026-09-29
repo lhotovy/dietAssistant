@@ -106,7 +106,7 @@ export function ShoppingListPanel({ planId, planVersion }: { planId: string; pla
                   </label>
                 </li>
               ))}
-            </ul><ShoppingAssistantPanel key={`${planId}:${planVersion}:${servings}`} items={result.items} /></>
+            </ul><ShoppingAssistantPanel key={`${planId}:${planVersion}:${servings}`} items={result.items} planId={planId} planVersion={planVersion} servings={servings} /></>
           )}
         </>
       )}

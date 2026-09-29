@@ -13,6 +13,7 @@ const schema = z.object({
     quantity: z.number().int().min(1).max(100),
     ingredientKey: z.string().min(1).max(200),
     productName: z.string().min(1).max(200),
+    rememberPreference: z.boolean().default(true),
   })).min(1).max(50),
 });
 
@@ -31,9 +32,10 @@ export async function POST(req: NextRequest) {
     if (result && typeof result === "object" && "success" in result && result.success === false) {
       return NextResponse.json({ error: "Rohlik produkty nepřidal do košíku.", result }, { status: 502 });
     }
-    {
+    const rememberedItems = items.filter((item) => item.rememberPreference);
+    if (rememberedItems.length) {
       try {
-        await prisma.$transaction(items.map((item) => prisma.rohlikProductPreference.upsert({
+        await prisma.$transaction(rememberedItems.map((item) => prisma.rohlikProductPreference.upsert({
           where: { connectionId_ingredientKey: { connectionId: connection.id, ingredientKey: item.ingredientKey } },
           create: { connectionId: connection.id, ingredientKey: item.ingredientKey, productId: item.productId, productName: item.productName },
           update: { productId: item.productId, productName: item.productName, chosenCount: { increment: 1 } },
