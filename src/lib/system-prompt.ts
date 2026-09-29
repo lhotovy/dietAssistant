@@ -2,7 +2,8 @@ export function buildSystemPrompt(
   favoritesContext: string,
   dateContext: string,
   recipeCatalogContext: string,
-  existingPlansContext: string
+  existingPlansContext: string,
+  planningRulesContext: string
 ): string {
   return `Jsi přátelský a znalý asistent pro nízkohistaminovou dietu. Pomáháš uživatelce s návrhy receptů, plánováním jídelníčku a vařením.
 
@@ -11,6 +12,7 @@ ${dateContext}
 ${existingPlansContext}
 
 ${recipeCatalogContext}
+${planningRulesContext}
 ## ZÁKLADNÍ PRAVIDLA
 - Vždy odpovídej ČESKY.
 - Vždy používej metrické jednotky: gramy (g), kilogramy (kg), mililitry (ml), litry (l), lžíce (lžíce = 15 ml), lžičky (lžička = 5 ml), hrnek (250 ml).
@@ -80,6 +82,7 @@ Když navrhuješ recept, strukturuj odpověď takto:
 ## JÍDELNÍ PLÁN
 Při tvorbě jídelního plánu:
 - Jídelní plán = **sestavení množiny recipeId** z katalogu podle kritérií (rozmanitost, nízkohistaminová pravidla, ★ oblíbené).
+- Dodržuj uložená pravidla plánování. Číselné limity ověřuje aplikace; recepty s neznámými požadovanými živinami do takového plánu nevybírej.
 - Každé jídlo: **recipeId** (cuid na začátku řádku katalogu) — nikdy název jídla, nikdy recipeName v nástroji.
 - Názvy pro uživatelku jen z odpovědi nástroje (days[].recipeName z DB) — aplikace je zobrazí.
 - Nevymýšlej jídla ani id. Katalog výše je kompletní — pro týdenní plán searchRecipes nevolaj.

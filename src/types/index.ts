@@ -17,6 +17,9 @@ export interface RecipeData {
   servings: number;
   tags: string[];
   source?: string | null;
+  sugarsPerServing?: number | null;
+  proteinPerServing?: number | null;
+  nutritionSource?: string | null;
 }
 
 export interface MealPlanDay {
@@ -69,4 +72,6 @@ export type PlanningRecipe = {
   description: string;
   ingredientNames: string[];
   isFavorite: boolean;
+  sugarsPerServing?: number | null;
+  proteinPerServing?: number | null;
 };

@@ -21,6 +21,7 @@ interface RecipeCardProps {
   onDelete?: (recipe: RecipeData) => void;
   isFavorite?: boolean;
   compact?: boolean;
+  onNutritionSaved?: (recipe: RecipeData) => void;
 }
 
 export function RecipeCard({
@@ -29,8 +30,44 @@ export function RecipeCard({
   onDelete,
   isFavorite = false,
   compact = false,
+  onNutritionSaved,
 }: RecipeCardProps) {
   const [expanded, setExpanded] = useState(!compact);
+  const [sugars, setSugars] = useState(recipe.sugarsPerServing?.toString() ?? "");
+  const [protein, setProtein] = useState(recipe.proteinPerServing?.toString() ?? "");
+  const [source, setSource] = useState(recipe.nutritionSource ?? "");
+  const [nutritionError, setNutritionError] = useState<string | null>(null);
+  const [savingNutrition, setSavingNutrition] = useState(false);
+
+  async function saveNutrition() {
+    const parsedSugars = sugars.trim() ? Number(sugars) : null;
+    const parsedProtein = protein.trim() ? Number(protein) : null;
+    if ((parsedSugars != null && (!Number.isFinite(parsedSugars) || parsedSugars < 0)) ||
+        (parsedProtein != null && (!Number.isFinite(parsedProtein) || parsedProtein < 0))) {
+      setNutritionError("Zadej platné nezáporné hodnoty.");
+      return;
+    }
+    setSavingNutrition(true);
+    setNutritionError(null);
+    try {
+      const response = await fetch(`/api/recipes/${encodeURIComponent(recipe.slug)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sugarsPerServing: parsedSugars,
+          proteinPerServing: parsedProtein,
+          nutritionSource: source.trim() || null,
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "Hodnoty se nepodařilo uložit.");
+      onNutritionSaved?.(body as RecipeData);
+    } catch (cause) {
+      setNutritionError(cause instanceof Error ? cause.message : "Hodnoty se nepodařilo uložit.");
+    } finally {
+      setSavingNutrition(false);
+    }
+  }
 
   const mealTypeLabels = recipe.mealTypes
     .map((t) => MEAL_TYPE_LABELS[t as MealType] ?? t)
@@ -158,6 +195,19 @@ export function RecipeCard({
               ))}
             </ol>
           </div>
+          {onNutritionSaved && (
+            <div className="border-t border-stone-100 pt-4 space-y-2">
+              <h4 className="text-sm font-semibold text-stone-700">Výživové hodnoty na porci</h4>
+              <p className="text-xs text-stone-500">Doplň hodnoty z ověřeného zdroje. Neznámé hodnoty nech prázdné.</p>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs text-stone-600">Cukry (g)<input type="number" min="0" step="0.1" value={sugars} onChange={(event) => setSugars(event.target.value)} className="block mt-1 w-full rounded-lg border border-stone-300 px-2 py-1 text-sm" /></label>
+                <label className="text-xs text-stone-600">Bílkoviny (g)<input type="number" min="0" step="0.1" value={protein} onChange={(event) => setProtein(event.target.value)} className="block mt-1 w-full rounded-lg border border-stone-300 px-2 py-1 text-sm" /></label>
+              </div>
+              <label className="block text-xs text-stone-600">Zdroj hodnot<input type="text" value={source} onChange={(event) => setSource(event.target.value)} placeholder="Etiketa, databáze…" className="block mt-1 w-full rounded-lg border border-stone-300 px-2 py-1 text-sm" /></label>
+              {nutritionError && <p role="alert" className="text-xs text-red-600">{nutritionError}</p>}
+              <Button type="button" size="sm" onClick={() => void saveNutrition()} disabled={savingNutrition}>Uložit hodnoty</Button>
+            </div>
+          )}
         </div>
       )}
 

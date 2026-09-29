@@ -136,6 +136,10 @@ export function RecipesClient() {
     }
   }
 
+  function handleNutritionSaved(updated: RecipeData) {
+    setRecipes((current) => current.map((recipe) => recipe.id === updated.id ? updated : recipe));
+  }
+
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="px-4 py-3 border-b border-stone-100 bg-white shrink-0">
@@ -222,6 +226,7 @@ export function RecipesClient() {
                 compact
                 onSaveToFavorites={handleSaveToFavorites}
                 onDelete={setRecipeToDelete}
+                onNutritionSaved={handleNutritionSaved}
                 isFavorite={favoriteRecipeIds.has(recipe.id)}
               />
             ))}

@@ -20,6 +20,9 @@ model Recipe {
   servings     Int
   tags         String     // comma-separated tags
   source       String?
+  sugarsPerServing Float?
+  proteinPerServing Float?
+  nutritionSource String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
@@ -70,4 +73,12 @@ model ChatSession {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+model UserPlanningProfile {
+  userId            String   @id
+  instructions      String   @default("")
+  maxSugarsPerDay   Float?
+  minProteinPerDay  Float?
+  updatedAt         DateTime @updatedAt
 }

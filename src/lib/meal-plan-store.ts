@@ -6,6 +6,7 @@ import {
   validateAndResolveMealPlanDays,
 } from "@/lib/meal-plan-validate";
 import type { MealPlanDay } from "@/types";
+import { checkPlanConstraints } from "@/lib/planning-constraints";
 
 export type MealPlanCreateInput = {
   title: string;
@@ -40,6 +41,8 @@ export async function createMealPlanForUser(
   }
 
   const resolvedDays = validation.days;
+  const constraintCheck = await checkPlanConstraints(userId, resolvedDays as MealPlanDay[]);
+  if (!constraintCheck.ok) return constraintCheck;
 
   const existingPlans = await getUserMealPlanRecords(userId);
   const conflict = detectMealPlanWeekConflict(existingPlans, {
