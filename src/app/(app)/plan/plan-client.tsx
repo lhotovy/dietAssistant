@@ -10,6 +10,7 @@ import { PlanMealSlot } from "@/components/plan/plan-meal-slot";
 import { RecipePicker } from "@/components/plan/recipe-picker";
 import { ShoppingListPanel } from "@/components/plan/shopping-list-panel";
 import { PlanningProfilePanel } from "@/components/plan/planning-profile-panel";
+import { RohlikConnectionPanel } from "@/components/plan/rohlik-connection-panel";
 
 interface MealPlan {
   id: string;
@@ -162,7 +163,8 @@ export function PlanClient() {
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
-        <PlanningProfilePanel userReady={userReady} />
+      <PlanningProfilePanel userReady={userReady} />
+      <RohlikConnectionPanel />
         {plans.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-4 py-12">
             <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center mb-4">
