@@ -1,5 +1,5 @@
 import { streamText, tool, convertToModelMessages, UIMessage } from "ai";
-import { chatStopWhen } from "@/lib/chat-stop";
+import { chatStopWhen, planRepairToolForNextStep } from "@/lib/chat-stop";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -340,6 +340,10 @@ export async function POST(req: Request) {
           return { success: true, recipeId: recipe.id, name };
         },
       }),
+    },
+    prepareStep: ({ steps }) => {
+      const toolName = planRepairToolForNextStep({ steps });
+      return toolName ? { activeTools: [toolName], toolChoice: { type: "tool", toolName } } : undefined;
     },
     stopWhen: chatStopWhen,
   });
