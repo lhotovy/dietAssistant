@@ -3,6 +3,7 @@ import test from "node:test";
 import { parseLidlOffers, findLidlOffers } from "../src/lib/lidl-prices";
 import { priceForNeed } from "../src/lib/package-price";
 import { extractRohlikProducts } from "../src/lib/rohlik-products";
+import { buildShoppingList, normalizeShoppingListKey, shoppingListItemKey } from "../src/lib/shopping-list";
 
 test("Lidl card parser reads priced store products", () => {
   const product = JSON.stringify({ productId: 123, title: "Trvanlivé mléko 1,5%", price: { price: 12.9, packaging: { text: "1 l" } }, canonicalUrl: "/p/mleko/p123", store: true });
@@ -23,4 +24,18 @@ test("Rohlik result parser extracts product candidates", () => {
   assert.deepEqual(extractRohlikProducts({ data: [{ productId: 123, productName: "Mléko", price: 19.9, inStock: true, favourite: true }] }), [
     { productId: 123, name: "Mléko", priceCzk: 19.9, inStock: true, favorite: true },
   ]);
+});
+
+test("shopping keys preserve name and unit without PostgreSQL-invalid NUL", () => {
+  const list = buildShoppingList(
+    [{ date: "2026-09-29", meals: [{ type: "obed", recipeId: "recipe-1" }] }],
+    [{ id: "recipe-1", name: "Lunch", servings: 1, ingredients: [{ name: "Mléko", amount: 1, unit: "l" }] }],
+    1
+  );
+  const key = shoppingListItemKey("Mléko", "ml");
+  assert.equal(list.items[0].key, key);
+  assert.equal(key.includes("\u0000"), false);
+  assert.equal(normalizeShoppingListKey("mléko\u0000ml"), key);
+  assert.equal(normalizeShoppingListKey("mléko\u0000ml\u0000extra"), null);
+  assert.notEqual(shoppingListItemKey("a,b", "c"), shoppingListItemKey("a", "b,c"));
 });

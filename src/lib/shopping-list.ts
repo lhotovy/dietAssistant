@@ -36,6 +36,18 @@ function normalizeUnit(raw: string) {
   return UNIT_ALIASES[unit] ?? { unit, multiplier: 1 };
 }
 
+/** JSON encoding keeps the name/unit pair distinct without PostgreSQL's forbidden NUL byte. */
+export function shoppingListItemKey(name: string, unit: string): string {
+  return JSON.stringify([name.toLocaleLowerCase("cs-CZ"), unit]);
+}
+
+/** Accept keys from an already-open page created before the NUL separator was removed. */
+export function normalizeShoppingListKey(key: string): string | null {
+  if (!key.includes("\u0000")) return key;
+  const parts = key.split("\u0000");
+  return parts.length === 2 ? JSON.stringify(parts) : null;
+}
+
 /** Calculate ingredient needs for one serving of each planned meal. */
 export function buildShoppingList(
   days: MealPlanDay[],
@@ -64,7 +76,7 @@ export function buildShoppingList(
           continue;
         }
         const { unit, multiplier } = normalizeUnit(rawUnit);
-        const key = `${name.toLocaleLowerCase("cs-CZ")}\u0000${unit}`;
+        const key = shoppingListItemKey(name, unit);
         const amount = ingredient.amount * multiplier * servingsPerMeal / recipe.servings;
         const existing = items.get(key);
         if (existing) {

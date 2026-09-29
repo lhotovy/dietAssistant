@@ -4,6 +4,7 @@ import { callRohlikTool } from "@/lib/rohlik-mcp";
 import { extractRohlikProducts } from "@/lib/rohlik-products";
 import { getRohlikConnection } from "@/lib/rohlik-oauth";
 import { prisma } from "@/lib/prisma";
+import { normalizeShoppingListKey } from "@/lib/shopping-list";
 
 export const runtime = "nodejs";
 
@@ -15,14 +16,16 @@ const schema = z.object({
 export async function POST(req: NextRequest) {
   const parsed = schema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: "Zadej 1–4 hledané suroviny." }, { status: 400 });
+  const ingredientKey = parsed.data.ingredientKey ? normalizeShoppingListKey(parsed.data.ingredientKey) : null;
+  if (parsed.data.ingredientKey && !ingredientKey) return NextResponse.json({ error: "Neplatný klíč suroviny." }, { status: 400 });
   try {
     const result = await callRohlikTool("batch_search_products", {
       queries: parsed.data.queries,
       context: "Uživatel hledá produkty pro nákup surovin do týdenního jídelního plánu.",
     });
     const connection = await getRohlikConnection();
-    const preference = connection && parsed.data.ingredientKey ? await prisma.rohlikProductPreference.findUnique({
-      where: { connectionId_ingredientKey: { connectionId: connection.id, ingredientKey: parsed.data.ingredientKey } },
+    const preference = connection && ingredientKey ? await prisma.rohlikProductPreference.findUnique({
+      where: { connectionId_ingredientKey: { connectionId: connection.id, ingredientKey } },
     }) : null;
     return NextResponse.json({ products: extractRohlikProducts(result), preferredProductId: preference?.productId ?? null });
   } catch (cause) {
