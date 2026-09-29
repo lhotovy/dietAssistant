@@ -21,10 +21,15 @@ export function ShoppingAssistantPanel({ items }: { items: ShoppingListItem[] })
   const [cartAdded, setCartAdded] = useState(false);
 
   useEffect(() => {
-    fetch("/api/rohlik/connection")
-      .then((response) => response.json())
-      .then((value) => setConnection(value))
-      .catch(() => setConnection({ configured: false, connected: false }));
+    const refresh = () => {
+      fetch("/api/rohlik/connection")
+        .then((response) => response.json())
+        .then((value) => setConnection(value))
+        .catch(() => setConnection({ configured: false, connected: false }));
+    };
+    refresh();
+    window.addEventListener("rohlik-connection-changed", refresh);
+    return () => window.removeEventListener("rohlik-connection-changed", refresh);
   }, []);
 
   async function compare(item: ShoppingListItem) {
@@ -99,9 +104,9 @@ export function ShoppingAssistantPanel({ items }: { items: ShoppingListItem[] })
     <div className="mt-5 border-t border-stone-200 pt-4 space-y-3">
       <h4 className="text-sm font-semibold text-stone-800">Porovnání Rohlik a Lidl</h4>
       {!connection ? <p className="text-xs text-stone-500">Ověřuji připojení…</p> :
-        !connection.configured ? <p className="text-xs text-amber-700">Pro připojení Rohlik nastav APP_BASE_URL a ROHLIK_TOKEN_ENCRYPTION_KEY na serveru.</p> :
+        !connection.configured ? <p className="text-xs text-amber-700">Pro připojení Rohlik nastav ROHLIK_TOKEN_ENCRYPTION_KEY na serveru.</p> :
           connection.connected ? <p className="text-xs text-green-700">Rohlik je připojený.</p> :
-            <a href="/api/rohlik/connect" className="text-xs text-green-700 underline">Připojit Rohlik účet</a>}
+            <p className="text-xs text-stone-500">Připoj Rohlik účet v panelu výše.</p>}
       <p className="text-xs text-stone-500">Lidl ceny jsou z veřejných stránek a mohou se lišit podle prodejny či dne. Před výběrem ověř balení a dostupnost.</p>
       {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
       <ul className="space-y-3">

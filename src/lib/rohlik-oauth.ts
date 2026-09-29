@@ -20,13 +20,23 @@ type AuthorizationMetadata = {
   registration_endpoint: string;
 };
 
-export type RohlikCredentials = {
+type OAuthRohlikCredentials = {
+  kind?: "oauth";
   clientId: string;
   accessToken: string;
   refreshToken?: string;
   expiresAt?: number;
   conversationId?: string;
 };
+
+export type LegacyRohlikCredentials = {
+  kind: "legacy";
+  email: string;
+  password: string;
+  conversationId?: string;
+};
+
+export type RohlikCredentials = OAuthRohlikCredentials | LegacyRohlikCredentials;
 
 type PendingFlow = {
   state: string;
@@ -51,10 +61,14 @@ function encryptionKey(): Buffer {
 export function rohlikConfigured(): boolean {
   try {
     encryptionKey();
-    return Boolean(process.env.APP_BASE_URL);
+    return true;
   } catch {
     return false;
   }
+}
+
+export function rohlikOAuthConfigured(): boolean {
+  return rohlikConfigured() && Boolean(process.env.APP_BASE_URL);
 }
 
 function appBaseUrl(): string {
@@ -175,13 +189,19 @@ export async function finishRohlikAuthorization(code: string, state: string, iss
   const tokens = await response.json() as { access_token?: string; refresh_token?: string; expires_in?: number };
   if (!tokens.access_token) throw new Error("Chybí přístupový token Rohlik.");
 
-  const connectionSecret = base64url(randomBytes(32));
   const credentials: RohlikCredentials = {
     clientId: flow.clientId,
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token,
     expiresAt: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : undefined,
   };
+  await storeRohlikConnection(credentials);
+}
+
+export async function storeRohlikConnection(credentials: RohlikCredentials): Promise<void> {
+  encryptionKey();
+  const cookieStore = await cookies();
+  const connectionSecret = base64url(randomBytes(32));
   const previousSecret = cookieStore.get(CONNECTION_COOKIE)?.value;
   if (previousSecret) {
     const oldId = connectionId(previousSecret);
@@ -222,7 +242,7 @@ export async function getRohlikConnection(): Promise<{ id: string; credentials: 
   const stored = await prisma.rohlikConnection.findUnique({ where: { id } });
   if (!stored) return null;
   let credentials = decrypt(stored.credentials);
-  if (credentials.expiresAt && credentials.expiresAt < Date.now() + 60_000 && credentials.refreshToken) {
+  if (credentials.kind !== "legacy" && credentials.expiresAt && credentials.expiresAt < Date.now() + 60_000 && credentials.refreshToken) {
     const endpoints = await metadata();
     const response = await fetch(endpoints.token_endpoint, {
       method: "POST",
