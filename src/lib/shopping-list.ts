@@ -12,6 +12,7 @@ export type ShoppingListItem = {
   name: string;
   amount: number;
   unit: string;
+  estimated?: boolean;
 };
 
 export type ShoppingListResult = {
@@ -34,6 +35,38 @@ const UNIT_ALIASES: Record<string, { unit: string; multiplier: number }> = {
 function normalizeUnit(raw: string) {
   const unit = raw.trim().toLocaleLowerCase("cs-CZ");
   return UNIT_ALIASES[unit] ?? { unit, multiplier: 1 };
+}
+
+type CanonicalIngredient = { name: string; pieceWeightGrams?: number };
+
+function canonicalIngredient(raw: string): CanonicalIngredient {
+  const value = raw.trim().toLocaleLowerCase("cs-CZ");
+  if (/^brambory(?:\s+(?:vařené|varene|velké|velke|oloupané|oloupane|nakrájené|nakrajene))*$/.test(value)) {
+    return { name: "Brambory", pieceWeightGrams: value.includes("velké") || value.includes("velke") ? 250 : 180 };
+  }
+  if (/^batáty(?:\s+(?:velké|velke|oloupané|oloupane|nakrájené|nakrajene))*$/.test(value)) {
+    return { name: "Batáty", pieceWeightGrams: 250 };
+  }
+  if (/^(?:čerstvá\s+)?mrkev(?:\s+(?:strouhaná|nakrájená|velká|oloupaná))*$/.test(value)) {
+    return { name: "Mrkev", pieceWeightGrams: 100 };
+  }
+  if (/^(?:čerstvý\s+)?zázvor$/.test(value)) return { name: "Zázvor" };
+  if (/^(?:jablko|jablka)$/.test(value)) return { name: "Jablka", pieceWeightGrams: 180 };
+  if (/^(?:hruška|hrušky)$/.test(value)) return { name: "Hrušky", pieceWeightGrams: 180 };
+  if (value === "cuketa" || value === "cukety velké") {
+    return { name: "Cuketa", pieceWeightGrams: value.includes("velké") ? 400 : 250 };
+  }
+  if (value === "cibule") return { name: "Cibule", pieceWeightGrams: 150 };
+  if (/^kuřecí pr(?:so|sa)$/.test(value)) return { name: "Kuřecí prsa" };
+  if (value === "máslo na formy") return { name: "Máslo" };
+  if (value === "med na podávání") return { name: "Med" };
+  if (/^granola(?: \(bez ořechů\)| bez ořechů)$/.test(value)) return { name: "Granola bez ořechů" };
+  if (/^petržel(?: \(kořen\)| kořen)$/.test(value)) return { name: "Petržel kořen" };
+  if (/^(?:čerstvá )?petrželová nať$/.test(value)) return { name: "Petrželová nať" };
+  if (/^(?:pažitka čerstvá|pažitka)$/.test(value)) return { name: "Pažitka" };
+  if (/^(?:rozmarýn čerstvý|rozmarýn)$/.test(value)) return { name: "Rozmarýn" };
+  if (/^(?:tymián čerstvý|tymián)$/.test(value)) return { name: "Tymián" };
+  return { name: raw.trim() };
 }
 
 /** JSON encoding keeps the name/unit pair distinct without PostgreSQL's forbidden NUL byte. */
@@ -75,14 +108,18 @@ export function buildShoppingList(
           skippedIngredients++;
           continue;
         }
-        const { unit, multiplier } = normalizeUnit(rawUnit);
-        const key = shoppingListItemKey(name, unit);
-        const amount = ingredient.amount * multiplier * servingsPerMeal / recipe.servings;
+        const canonical = canonicalIngredient(name);
+        const normalized = normalizeUnit(rawUnit);
+        const estimated = normalized.unit === "ks" && canonical.pieceWeightGrams != null;
+        const unit = estimated ? "g" : normalized.unit;
+        const key = shoppingListItemKey(canonical.name, unit);
+        const amount = ingredient.amount * normalized.multiplier * (estimated ? canonical.pieceWeightGrams! : 1) * servingsPerMeal / recipe.servings;
         const existing = items.get(key);
         if (existing) {
           existing.amount += amount;
+          existing.estimated ||= estimated;
         } else {
-          items.set(key, { key, name, amount, unit });
+          items.set(key, { key, name: canonical.name, amount, unit, ...(estimated ? { estimated: true } : {}) });
         }
       }
     }

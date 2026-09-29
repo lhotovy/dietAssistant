@@ -101,12 +101,12 @@ export function ShoppingListPanel({ planId, planVersion }: { planId: string; pla
                       className="mt-1 accent-green-600"
                     />
                     <span className={checked.includes(item.key) ? "line-through text-stone-400" : ""}>
-                      <strong>{formatAmount(item.amount)} {item.unit}</strong> {item.name}
+                      <strong>{formatAmount(item.amount)} {item.unit}</strong> {item.name}{item.estimated ? " (odhad přepočtu kusů)" : ""}
                     </span>
                   </label>
                 </li>
               ))}
-            </ul><ShoppingAssistantPanel key={`${planId}:${planVersion}:${servings}`} items={result.items} /></>
+            </ul><ShoppingAssistantPanel key={`${planId}:${planVersion}:${servings}`} items={result.items} planId={planId} planVersion={planVersion} servings={servings} /></>
           )}
         </>
       )}
