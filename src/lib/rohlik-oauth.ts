@@ -35,6 +35,13 @@ type PendingFlow = {
   redirectUri: string;
 };
 
+export class RohlikRegistrationError extends Error {
+  constructor(public readonly redirectRejected: boolean, message: string) {
+    super(message);
+    this.name = "RohlikRegistrationError";
+  }
+}
+
 function encryptionKey(): Buffer {
   const key = Buffer.from(process.env.ROHLIK_TOKEN_ENCRYPTION_KEY ?? "", "base64");
   if (key.length !== 32) throw new Error("ROHLIK_TOKEN_ENCRYPTION_KEY musí mít 32 bajtů v base64.");
@@ -78,31 +85,50 @@ function base64url(bytes: Buffer): string {
   return bytes.toString("base64url");
 }
 
+function registeredClientSecret(): string | undefined {
+  return process.env.ROHLIK_OAUTH_CLIENT_ID ? process.env.ROHLIK_OAUTH_CLIENT_SECRET : undefined;
+}
+
 export async function beginRohlikAuthorization(): Promise<string> {
   encryptionKey();
   const endpoints = await metadata();
   const redirectUri = `${appBaseUrl()}/api/rohlik/callback`;
-  const registration = await fetch(endpoints.registration_endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      client_name: "Diet Assistant",
-      redirect_uris: [redirectUri],
-      grant_types: ["authorization_code", "refresh_token"],
-      response_types: ["code"],
-      token_endpoint_auth_method: "none",
-    }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(10000),
-  });
-  if (!registration.ok) throw new Error("Rohlik odmítl registraci OAuth klienta.");
-  const client = await registration.json() as { client_id?: string };
-  if (!client.client_id) throw new Error("Rohlik nevrátil OAuth client_id.");
+  let clientId = process.env.ROHLIK_OAUTH_CLIENT_ID;
+  if (!clientId) {
+    const registration = await fetch(endpoints.registration_endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_name: "Diet Assistant",
+        redirect_uris: [redirectUri],
+        grant_types: ["authorization_code", "refresh_token"],
+        response_types: ["code"],
+        token_endpoint_auth_method: "none",
+      }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!registration.ok) {
+      const body = await registration.text();
+      let description = "";
+      try { description = (JSON.parse(body) as { error_description?: string }).error_description ?? ""; } catch { /* non-JSON error */ }
+      const redirectRejected = description.includes("Redirect URI is not allowed for dynamic client registration");
+      throw new RohlikRegistrationError(
+        redirectRejected,
+        redirectRejected
+          ? `Rohlik nepovoluje OAuth callback ${redirectUri} pro dynamickou registraci klienta.`
+          : `Rohlik odmítl registraci OAuth klienta (HTTP ${registration.status}${description ? `: ${description.slice(0, 200)}` : ""}).`
+      );
+    }
+    const client = await registration.json() as { client_id?: string };
+    clientId = client.client_id;
+    if (!clientId) throw new Error("Rohlik nevrátil OAuth client_id.");
+  }
 
   const flow: PendingFlow = {
     state: base64url(randomBytes(32)),
     verifier: base64url(randomBytes(32)),
-    clientId: client.client_id,
+    clientId,
     redirectUri,
   };
   (await cookies()).set(FLOW_COOKIE, JSON.stringify(flow), { ...COOKIE_OPTIONS, maxAge: 600 });
@@ -137,6 +163,7 @@ export async function finishRohlikAuthorization(code: string, state: string, iss
       grant_type: "authorization_code",
       code,
       client_id: flow.clientId,
+      ...(registeredClientSecret() ? { client_secret: registeredClientSecret() } : {}),
       redirect_uri: flow.redirectUri,
       code_verifier: flow.verifier,
       resource: "https://mcp.rohlik.cz/mcp",
@@ -204,6 +231,7 @@ export async function getRohlikConnection(): Promise<{ id: string; credentials: 
         grant_type: "refresh_token",
         refresh_token: credentials.refreshToken,
         client_id: credentials.clientId,
+        ...(registeredClientSecret() ? { client_secret: registeredClientSecret() } : {}),
         resource: "https://mcp.rohlik.cz/mcp",
       }),
       cache: "no-store",

@@ -15,6 +15,7 @@ export function RohlikConnectionPanel() {
     if (result === "connected") setMessage("Rohlik účet je připojený.");
     if (result === "failed") setMessage("Připojení se nepodařilo. Zkus to znovu.");
     if (result === "cancelled") setMessage("Připojení bylo zrušené.");
+    if (result === "unsupported-domain") setMessage("Rohlik odmítl OAuth callback na této doméně. Pro tuto adresu je potřeba povolená registrace OAuth klienta u Rohlik.");
     fetch("/api/rohlik/connection")
       .then((response) => response.json())
       .then((value: ConnectionStatus) => setStatus(value))

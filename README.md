@@ -23,4 +23,6 @@ U uloženého plánu se vytváří nákupní seznam podle počtu porcí. U každ
 2. Spusť migrace `npx prisma migrate deploy` v prostředí odpovídajícím databázi aplikace.
 3. Na stránce plánu otevři nákupní seznam a klikni na **Připojit Rohlik účet**. Přihlášení proběhne na Rohlik; aplikace ukládá tokeny zašifrované na serveru a v prohlížeči drží pouze náhodný identifikátor připojení.
 
+Rohlik může odmítnout dynamickou registraci OAuth klienta pro některé veřejné callback domény (ověřeno pro doménu nasazení `vercel.app`). V takovém případě je potřeba od Rohlik získat klienta povoleného pro přesnou adresu `APP_BASE_URL/api/rohlik/callback`. Jeho ID nastav jako `ROHLIK_OAUTH_CLIENT_ID`; pokud Rohlik vydá i klientské tajemství, nastav `ROHLIK_OAUTH_CLIENT_SECRET`. Bez schválené registrace nelze připojení na odmítnuté doméně dokončit.
+
 Lidl lookup pokrývá veřejné stránky „Ceny v klidu“ a „Čerstvé maso“. Nejde o kompletní katalog prodejen. Ceny a dostupnost se mohou lišit podle místa a času. Aplikace nikdy sama nedokončuje objednávku Rohlik.
