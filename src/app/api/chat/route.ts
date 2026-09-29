@@ -24,6 +24,7 @@ import { clearPlanningCatalogCache } from "@/lib/planning-catalog";
 import { createMealPlanForUser } from "@/lib/meal-plan-store";
 import { getUserMealPlanRecords } from "@/lib/meal-plan-user-plans";
 import type { MealPlanDay } from "@/types";
+import { checkPlanConstraints } from "@/lib/planning-constraints";
 
 export const maxDuration = 120;
 
@@ -39,10 +40,11 @@ export async function POST(req: Request) {
   const favoritesContext =
     "Oblíbené recepty jsou v katalogu označené ★ u příslušného recipeId.";
 
-  const [catalogContext, modelMessages, userMealPlans] = await Promise.all([
+  const [catalogContext, modelMessages, userMealPlans, planningProfile] = await Promise.all([
     resolvePlanningCatalogContext(userId, catalogVersion),
     convertToModelMessages(messages),
     getUserMealPlanRecords(userId),
+    prisma.userPlanningProfile.findUnique({ where: { userId } }),
   ]);
   const recipeCatalogContext = catalogContext.contextText;
 
@@ -72,7 +74,13 @@ export async function POST(req: Request) {
       favoritesContext,
       buildDateContext(),
       recipeCatalogContext,
-      existingPlansContext
+      existingPlansContext,
+      [
+        "## ULOŽENÁ PRAVIDLA PLÁNOVÁNÍ",
+        planningProfile?.instructions ? `Pokyny uživatele: ${planningProfile.instructions}` : "Žádné další obecné pokyny.",
+        planningProfile?.maxSugarsPerDay != null ? `Každý den nejvýše ${planningProfile.maxSugarsPerDay} g cukrů na osobu.` : "",
+        planningProfile?.minProteinPerDay != null ? `Každý den nejméně ${planningProfile.minProteinPerDay} g bílkovin na osobu.` : "",
+      ].filter(Boolean).join("\n")
     ),
     messages: modelMessages,
     tools: {
@@ -197,6 +205,10 @@ export async function POST(req: Request) {
             };
           }
           const enriched = await enrichMealPlanDays(validation.days);
+          const constraintCheck = await checkPlanConstraints(userId, validation.days as MealPlanDay[]);
+          if (!constraintCheck.ok) {
+            return { success: false, error: constraintCheck.error };
+          }
 
           return withWeekConflict(
             {

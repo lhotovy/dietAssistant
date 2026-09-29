@@ -72,7 +72,8 @@ function formatRecipeLine(r: PlanningRecipe): string {
       ? r.ingredientNames.slice(0, 12).join(", ")
       : "—";
   const desc = r.description || "—";
-  return `${r.id} | ${r.name}${fav} | ingr: ${ing} | ${desc}`;
+  const nutrition = `cukry: ${r.sugarsPerServing ?? "neznámé"} g/porce; bílkoviny: ${r.proteinPerServing ?? "neznámé"} g/porce`;
+  return `${r.id} | ${r.name}${fav} | ${nutrition} | ingr: ${ing} | ${desc}`;
 }
 
 export function formatPlanningCatalogContext(recipes: PlanningRecipe[]): string {
@@ -112,6 +113,8 @@ export async function buildPlanningCatalog(
         mealTypes: true,
         description: true,
         ingredients: true,
+        sugarsPerServing: true,
+        proteinPerServing: true,
         updatedAt: true,
       },
       orderBy: { name: "asc" },
@@ -134,6 +137,8 @@ export async function buildPlanningCatalog(
     description: truncateDescription(r.description),
     ingredientNames: parseIngredientNames(r.ingredients),
     isFavorite: favoriteIds.has(r.id),
+    sugarsPerServing: r.sugarsPerServing,
+    proteinPerServing: r.proteinPerServing,
   }));
 
   const maxUpdatedAt = rows.reduce(

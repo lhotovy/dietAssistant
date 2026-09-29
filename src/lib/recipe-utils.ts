@@ -15,6 +15,9 @@ export function parseRecipe(recipe: Recipe): RecipeData {
     servings: recipe.servings,
     tags: recipe.tags ? recipe.tags.split(",").map((s) => s.trim()) : [],
     source: recipe.source,
+    sugarsPerServing: recipe.sugarsPerServing,
+    proteinPerServing: recipe.proteinPerServing,
+    nutritionSource: recipe.nutritionSource,
   };
 }
 

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getUserId } from "@/lib/user";
 import type { MealPlanDay } from "@/types";
 import { createMealPlanForUser } from "@/lib/meal-plan-store";
+import { checkPlanConstraints } from "@/lib/planning-constraints";
 import {
   enrichMealPlanDays,
   validateMealPlanRecipeIds,
@@ -86,6 +87,11 @@ export async function PATCH(req: NextRequest) {
   });
   if (!validation.ok) {
     return NextResponse.json({ error: validation.error }, { status: 400 });
+  }
+
+  const constraintCheck = await checkPlanConstraints(userId, days, true);
+  if (!constraintCheck.ok) {
+    return NextResponse.json({ error: constraintCheck.error }, { status: 400 });
   }
 
   const enriched = await enrichMealPlanDays(days);

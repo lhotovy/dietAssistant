@@ -20,6 +20,9 @@ model Recipe {
   servings     Int
   tags         String     // comma-separated tags
   source       String?
+  sugarsPerServing Float?
+  proteinPerServing Float?
+  nutritionSource String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
@@ -70,4 +73,30 @@ model ChatSession {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+model UserPlanningProfile {
+  userId            String   @id
+  instructions      String   @default("")
+  maxSugarsPerDay   Float?
+  minProteinPerDay  Float?
+  updatedAt         DateTime @updatedAt
+}
+
+model RohlikConnection {
+  id          String   @id // SHA-256 of the random, httpOnly connection cookie
+  credentials String   // AES-256-GCM encrypted OAuth tokens and client registration
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model RohlikProductPreference {
+  connectionId String
+  ingredientKey String
+  productId    Int
+  productName  String
+  chosenCount  Int      @default(1)
+  updatedAt    DateTime @updatedAt
+
+  @@id([connectionId, ingredientKey])
 }
