@@ -6,6 +6,7 @@ import type { ShoppingListItem } from "@/lib/shopping-list";
 import type { LidlOffer } from "@/lib/lidl-prices";
 import type { RohlikProduct } from "@/lib/rohlik-products";
 import { priceForNeed } from "@/lib/package-price";
+import { isRelevantProduct } from "@/lib/product-relevance";
 
 type Choice = { store: "rohlik"; product: RohlikProduct; quantity: number } |
   { store: "lidl"; product: LidlOffer; quantity: number };
@@ -51,8 +52,8 @@ export function ShoppingAssistantPanel({ items }: { items: ShoppingListItem[] })
         rohlik = (value.products ?? []).sort((a, b) => Number(b.productId === value.preferredProductId) - Number(a.productId === value.preferredProductId) || Number(b.favorite) - Number(a.favorite) || a.priceCzk - b.priceCzk);
       }
       setOffers((current) => ({ ...current, [item.key]: {
-        rohlik: rohlik.filter((product) => product.inStock),
-        lidl: lidl.offers ?? [],
+        rohlik: rohlik.filter((product) => product.inStock && isRelevantProduct(item.name, product.name)),
+        lidl: (lidl.offers ?? []).filter((product) => isRelevantProduct(item.name, product.name)),
         lidlErrors: lidl.errors ?? 0,
       } }));
     } catch (cause) {
