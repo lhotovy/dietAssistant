@@ -3,14 +3,19 @@ const RAW_PRODUCE: Record<string, string[]> = {
   brambory: ["brambory", "brambor"],
   mrkev: ["mrkev", "mrkve"],
   cibule: ["cibule", "cibuli"],
-  zazvor: ["zazvor", "zazvorovy"],
+  zazvor: ["zazvor"],
+  cuketa: ["cuketa", "cukety"],
+  jablka: ["jablka", "jablko"],
+  hrusky: ["hrusky", "hruska"],
 };
 
 const PREPARED_FOOD_WORDS = new Set([
   "burger", "burgery", "gnocchi", "noky", "hranolky", "chipsy", "lupinky",
   "polevka", "omacka", "pyre", "kase", "pomazanka", "soup", "salat",
   "knedliky", "testoviny", "rizoto", "placicky", "krokety", "pizza",
-  "směs", "smes", "mrazene", "mrazené", "predvarene", "predvarene",
+  "smes", "mrazene", "predvarene", "marinovane", "marinovana",
+  "uzene", "uzena", "smazene", "smazena", "pecene", "pecena",
+  "varene", "varena", "susene", "susena", "dzus", "stava",
 ]);
 
 export function productTokens(value: string): string[] {

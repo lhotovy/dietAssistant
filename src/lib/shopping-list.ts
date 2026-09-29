@@ -51,6 +51,21 @@ function canonicalIngredient(raw: string): CanonicalIngredient {
     return { name: "Mrkev", pieceWeightGrams: 100 };
   }
   if (/^(?:čerstvý\s+)?zázvor$/.test(value)) return { name: "Zázvor" };
+  if (/^(?:jablko|jablka)$/.test(value)) return { name: "Jablka", pieceWeightGrams: 180 };
+  if (/^(?:hruška|hrušky)$/.test(value)) return { name: "Hrušky", pieceWeightGrams: 180 };
+  if (value === "cuketa" || value === "cukety velké") {
+    return { name: "Cuketa", pieceWeightGrams: value.includes("velké") ? 400 : 250 };
+  }
+  if (value === "cibule") return { name: "Cibule", pieceWeightGrams: 150 };
+  if (/^kuřecí pr(?:so|sa)$/.test(value)) return { name: "Kuřecí prsa" };
+  if (value === "máslo na formy") return { name: "Máslo" };
+  if (value === "med na podávání") return { name: "Med" };
+  if (/^granola(?: \(bez ořechů\)| bez ořechů)$/.test(value)) return { name: "Granola bez ořechů" };
+  if (/^petržel(?: \(kořen\)| kořen)$/.test(value)) return { name: "Petržel kořen" };
+  if (/^(?:čerstvá )?petrželová nať$/.test(value)) return { name: "Petrželová nať" };
+  if (/^(?:pažitka čerstvá|pažitka)$/.test(value)) return { name: "Pažitka" };
+  if (/^(?:rozmarýn čerstvý|rozmarýn)$/.test(value)) return { name: "Rozmarýn" };
+  if (/^(?:tymián čerstvý|tymián)$/.test(value)) return { name: "Tymián" };
   return { name: raw.trim() };
 }
 

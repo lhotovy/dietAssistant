@@ -59,12 +59,30 @@ test("potato variants combine into one estimated shopping need", () => {
   assert.deepEqual(list.items, [{ key: shoppingListItemKey("Brambory", "g"), name: "Brambory", amount: 1300, unit: "g", estimated: true }]);
 });
 
+test("catalog spelling and preparation notes combine equivalent ingredients", () => {
+  const list = buildShoppingList(
+    [{ date: "2026-09-29", meals: [{ type: "obed", recipeId: "a" }, { type: "vecere", recipeId: "b" }] }],
+    [
+      { id: "a", name: "A", servings: 1, ingredients: [{ name: "Jablko", amount: 1, unit: "ks" }, { name: "Kuřecí prso", amount: 200, unit: "g" }, { name: "Máslo", amount: 20, unit: "g" }] },
+      { id: "b", name: "B", servings: 1, ingredients: [{ name: "Jablka", amount: 2, unit: "ks" }, { name: "Kuřecí prsa", amount: 400, unit: "g" }, { name: "Máslo na formy", amount: 10, unit: "g" }] },
+    ], 1
+  );
+  assert.deepEqual(list.items.map(({ name, amount, unit }) => ({ name, amount, unit })), [
+    { name: "Jablka", amount: 540, unit: "g" },
+    { name: "Kuřecí prsa", amount: 600, unit: "g" },
+    { name: "Máslo", amount: 30, unit: "g" },
+  ]);
+});
+
 test("ingredient matching excludes prepared sweet-potato dishes", () => {
   assert.equal(isRelevantProduct("Batáty", "Batáty BIO 1 kg"), true);
   assert.equal(isRelevantProduct("Batáty", "Burger gnocchi s batáty"), false);
   assert.equal(isRelevantProduct("Batáty", "Batátové hranolky"), false);
   assert.equal(isRelevantProduct("Brambory", "Bramborové krokety"), false);
   assert.equal(isRelevantProduct("Mléko", "Kokosové mléko 1 l"), false);
+  assert.equal(isRelevantProduct("Jablka", "Jablko červené 1 kg"), true);
+  assert.equal(isRelevantProduct("Jablka", "Jablka sušená 200 g"), false);
+  assert.equal(isRelevantProduct("Kuřecí prsa", "Kuřecí prsa marinovaná 500 g"), false);
 });
 
 test("automatic selection compares package totals and respects a saved brand", () => {
